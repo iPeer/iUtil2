@@ -27,10 +27,10 @@ import com.simple.ipeer.iutil2.irc.Server;
 
 public class Main implements Runnable {
 
-	private static final File DEFAULT_CONFIG_DIR = new File("/config/config.cfg");
+	private static final File DEFAULT_CONFIG_DIR = new File("./config");
 	private static final Server DEFAULT_SERVER = new Server("irc.swiftirc.net", false, 6667);
 	private static final String DEFAULT_NICK = "iUtil";
-	private static final File DEFAULT_LOGS_DIR = new File("/logs");
+	private static final File DEFAULT_LOGS_DIR = new File("./logs");
 
 	public Properties config = new Properties();
 	public Server server = DEFAULT_SERVER;
@@ -137,7 +137,7 @@ public class Main implements Runnable {
 		if (Boolean.valueOf(config.getProperty("debug")))
 				System.err.println(out);
 		try {
-			logWriter.write(out);
+			logWriter.write(out+"\r\n");
 			logWriter.flush();
 		} 
 		catch (IOException e) {
