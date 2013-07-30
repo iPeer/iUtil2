@@ -11,21 +11,14 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
-import java.security.InvalidKeyException;
 import java.security.Key;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Properties;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -35,13 +28,24 @@ import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
 import com.simple.ipeer.iutil2.irc.Server;
 import com.simple.ipeer.iutil2.irc.protocol.Protocol;
+import com.simple.ipeer.iutil2.youtube.YouTube;
 
 public class Main implements Runnable {
+	
+	public final String BOT_VERSION = "0.1";
 
 	private static final File DEFAULT_CONFIG_DIR = new File("./config");
 	private static final Server DEFAULT_SERVER = new Server("irc.swiftirc.net", false, 6667);
 	private static final String DEFAULT_NICK = "iUtil";
 	private static final File DEFAULT_LOGS_DIR = new File("./logs");
+	
+	public static final char COLOUR = 0x03;
+	public static final char BOLD = 0x02;
+	public static final char UNDERLINE = 0x1F;
+	public static final char ITALICS = 0x1D;
+	public static final char HIGHLIGHT = 0x16;
+	public static final char ENDALL = 0xF0;
+	public static final char DASH = 8212;
 
 	public Properties config = new Properties();
 	public Server server = DEFAULT_SERVER;
@@ -66,6 +70,8 @@ public class Main implements Runnable {
 	private HashMap<String, String> NETWORK_SETTINGS;
 	private HashMap<String, Channel> CHANNEL_LIST;
 	private boolean SERVER_REGISTERED = false;
+	
+	private YouTube youtubeAnnouncer;
 
 
 	public static void main(String[] args) {
@@ -132,6 +138,10 @@ public class Main implements Runnable {
 			config.put("ssl", args.get("ssl"));
 		if (args.containsKey("debug"))
 			config.put("debug", args.get("debug"));
+		
+		// Announcers and other threads that should run while the bot is
+		
+		youtubeAnnouncer = new YouTube(this);
 
 		// Now everything should be okay and we can start the bot...
 
@@ -143,6 +153,7 @@ public class Main implements Runnable {
 	}
 
 	public void reconnect() {
+		this.SERVER_REGISTERED = false;
 		this.engineThread.interrupt();
 		this.engineRunning = false;
 		this.engineThread = new Thread(this, "iUtil 2 Main Thread");
@@ -157,7 +168,7 @@ public class Main implements Runnable {
 		String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
 		String out = time+" ["+type+"] "+line;
 		if (Boolean.valueOf(config.getProperty("debug")))
-			System.err.println(out.replaceAll("(\\r\\n|\\n\\r)", ""));
+			System.out.println(out.replaceAll("(\\r\\n|\\n\\r)", ""));
 		try {
 			logWriter.write(out+"\r\n");
 			logWriter.flush();
@@ -251,6 +262,9 @@ public class Main implements Runnable {
 		defaultConfig.put("partMessageFormat", "PART command from %NICK%");
 		defaultConfig.put("identificationString", "PRIVMSG NickServ :IDENTIFY %PASSWORD%");
 		defaultConfig.put("autoJoin", "#QuestHelp,#Peer.Dev,#AWeSome");
+		defaultConfig.put("colour1", "14");
+		defaultConfig.put("colour2", "13");
+		defaultConfig.put("noAMSG", "#Peer.Dev");
 		createConfigDefaults(defaultConfig);
 
 		connection = new Socket();
@@ -291,10 +305,17 @@ public class Main implements Runnable {
 
 		String line = "";
 		try {
+			Protocol protocol = new Protocol();
 			// Connection data is parsed here, "regular" IRC traffic is parsed by Protocol.java
 			while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
 				log("<- "+line, "IRC");
-				if (line.indexOf("001") >= 0) // Server address
+				if (line.startsWith("PING ")) // in case the server pings while we're connecting
+					send("PONG "+line.substring(5));
+				// Handle being disconnected by the server during connect
+				else if (line.startsWith("ERROR :")) {
+					protocol.handleDisconnect(this, line.substring(7));
+				}
+				else if (line.indexOf("001") >= 0) // Server address
 					this.CURRENT_SERVER = line.split(" ")[0].substring(1);
 
 				else if (line.indexOf("005") >= 0) {	// Network settings	
@@ -315,7 +336,6 @@ public class Main implements Runnable {
 				}
 
 				else if (line.indexOf("433") >= 0) {
-					log("Nick is in use, trying "+CURRENT_NICK+"2");
 					String newNick = "";
 					try {
 						int n = Integer.valueOf(CURRENT_NICK.substring(CURRENT_NICK.length() - 1));
@@ -324,6 +344,7 @@ public class Main implements Runnable {
 					catch (NumberFormatException e) {
 						newNick = CURRENT_NICK+"2";
 					}
+					log("Nick is in use, trying "+newNick);
 					changeNick(newNick);
 				}
 
@@ -337,12 +358,13 @@ public class Main implements Runnable {
 
 			}
 
-			//TODO: Temporary join of channels (which doesn't work).
 			String[] chans = config.getProperty("autoJoin").split(",");
 			for (String a : chans)
 				joinChannel(a);
+			
+			// After joining channels we can start any announcers we may have.
+			youtubeAnnouncer.startIfNotRunning();
 
-			Protocol protocol = new Protocol();
 			log("Protocol class is now handling incoming traffic.");
 			log(protocol.toString());
 			while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
@@ -431,6 +453,22 @@ public class Main implements Runnable {
 			e.printStackTrace();
 			return new char[0];
 		} 
+	}
+
+	public void partChannel(String channel, String message) {
+		if (!message.equals(""))
+			send("PART "+channel+" :"+message);
+		else
+			send("PART "+channel);
+		CHANNEL_LIST.remove(channel.toLowerCase());
+		log("Now in "+CHANNEL_LIST.size()+" channels.");
+	}
+	
+	public void amsg(String msg) {
+		for (Channel c : CHANNEL_LIST.values())
+			if (!config.getProperty("noAMSG").toLowerCase().contains(c.getName()))
+				send("PRIVMSG "+c.getName()+" :"+msg);
+			
 	}
 
 
