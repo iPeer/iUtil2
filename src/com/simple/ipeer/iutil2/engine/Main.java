@@ -22,8 +22,10 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
-import com.simple.ipeer.iutil2.engine.protocol.Protocol;
+import com.simple.ipeer.iutil2.irc.Channel;
+import com.simple.ipeer.iutil2.irc.SSLUtils;
 import com.simple.ipeer.iutil2.irc.Server;
+import com.simple.ipeer.iutil2.irc.protocol.Protocol;
 
 public class Main implements Runnable {
 
@@ -40,19 +42,19 @@ public class Main implements Runnable {
 	public File logDir;
 	public File logFile;
 	public FileWriter logWriter;
+	public String CURRENT_NICK;
 
 	private Thread engineThread;
-	private Main engine;
+	//private Main engine;
 	private boolean engineRunning = false;
 	
 	private Socket connection;
 	private BufferedReader in;
 	private BufferedWriter out;
-	private String CURRENT_NICK;
 	private String CURRENT_SERVER;
 	private String CURRENT_NETWORK;
-	private List<String> CURRENT_CHANNELS;
 	private HashMap<String, String> NETWORK_SETTINGS;
+	private HashMap<String, Channel> CHANNEL_LIST;
 
 	/**
 	 * @param args
@@ -65,7 +67,7 @@ public class Main implements Runnable {
 		}
 
 		// Start the bot
-		Main main = new Main(startArgs);
+		new Main(startArgs);
 
 	}
 
@@ -125,17 +127,21 @@ public class Main implements Runnable {
 		// Now everything should be okay and we can start the bot...
 		
 		this.engineThread = new Thread(this, "Main iUtil 2 Thread");
-		this.engine = this;
+		//this.engine = this;
 		// Oh god.
 		start();
 
 	}
 
 	public void log(String line) {
+		log(line, "DEBUG");
+	}
+	
+	public void log(String line, String type) {
 		String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
-		String out = time+": "+line;
+		String out = time+" ["+type+"] "+line;
 		if (Boolean.valueOf(config.getProperty("debug")))
-				System.err.println(out);
+				System.err.println(out.replaceAll("(\\r\\n|\\n\\r)", ""));
 		try {
 			logWriter.write(out+"\r\n");
 			logWriter.flush();
@@ -182,6 +188,7 @@ public class Main implements Runnable {
 
 	}
 	
+	@SuppressWarnings("unused")
 	private void createConfigDefaults(String string, String string2) {
 		createConfigDefaults(string, string2, true);
 	}
@@ -198,15 +205,18 @@ public class Main implements Runnable {
 	
 	public void createConfigDefaults(HashMap<String, String> c, boolean check) {
 		log("Creating config entries...");
+		int additions = 0;
 		for (String k : c.keySet()) {
 			if (config.containsKey(k) && check)
 				log("Entry "+k+" already present in config. ("+config.getProperty(k)+")");
 			else {
 				log("Creating default config entry: "+k+" = "+c.get(k));
 				config.put(k, c.get(k));
+				additions++;
 			}
 		}
-		saveConfig();
+		if (additions > 0)
+			saveConfig();
 	}
 	
 	public void start() {
@@ -263,12 +273,13 @@ public class Main implements Runnable {
 		try {
 			// Connection data is parsed here, "regular" IRC traffic is parsed by Protocol.java
 			while ((line = in.readLine()) != null && this.engineRunning) {
-				log(line);
+				log("<- "+line, "IRC");
 				if (line.indexOf("001") >= 0) // Server address
 					this.CURRENT_SERVER = line.split(" ")[0].substring(1);
 				
 				else if (line.indexOf("005") >= 0) {	// Network settings	
-					NETWORK_SETTINGS = new HashMap<String, String>();
+					if (NETWORK_SETTINGS == null)
+						NETWORK_SETTINGS = new HashMap<String, String>();
 					String[] a = line.split(" ");
 					for (int x = 3; x < a.length; x++) {
 						if (a[x].contains("=")) {
@@ -340,11 +351,11 @@ public class Main implements Runnable {
 	}
 	
 	public void joinChannel(String channel) {
-		if (CURRENT_CHANNELS == null)
-			CURRENT_CHANNELS = new ArrayList<String>();
+		if (CHANNEL_LIST == null)
+			CHANNEL_LIST = new HashMap<String, Channel>();
 		send("JOIN "+channel);
-		CURRENT_CHANNELS.add(channel);
-		log("Now in "+CURRENT_CHANNELS.size()+" channels.");
+		CHANNEL_LIST.put(channel.toLowerCase(), new Channel(channel.toLowerCase()));
+		log("Now in "+CHANNEL_LIST.size()+" channels.");
 		send("WHO "+channel);
 	}
 	
@@ -356,12 +367,16 @@ public class Main implements Runnable {
 			if (flush)
 				out.flush();
 			if (Boolean.valueOf(config.getProperty("debug")))
-					System.err.println("-> "+data.replaceAll("\\[rn]", ""));
+					log("-> "+data.replaceAll("\\[rn]", ""), "IRC");
 			
 		} catch (IOException e) {
 			log("Couldn't send data to socket!");
 			e.printStackTrace();
 		}
+	}
+
+	public HashMap<String, Channel> getChannelList() {
+		return CHANNEL_LIST;
 	}
 
 
