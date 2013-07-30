@@ -2,6 +2,7 @@ package com.simple.ipeer.iutil2.engine;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -10,6 +11,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
@@ -18,6 +22,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -43,11 +52,12 @@ public class Main implements Runnable {
 	public File logFile;
 	public FileWriter logWriter;
 	public String CURRENT_NICK;
+	public Boolean REQUESTED_QUIT = false;
 
 	private Thread engineThread;
 	//private Main engine;
 	private boolean engineRunning = false;
-	
+
 	private Socket connection;
 	private BufferedReader in;
 	private BufferedWriter out;
@@ -55,10 +65,9 @@ public class Main implements Runnable {
 	private String CURRENT_NETWORK;
 	private HashMap<String, String> NETWORK_SETTINGS;
 	private HashMap<String, Channel> CHANNEL_LIST;
+	private boolean SERVER_REGISTERED = false;
 
-	/**
-	 * @param args
-	 */
+
 	public static void main(String[] args) {
 		HashMap<String, String> startArgs = new HashMap<String, String>();
 		for (String a : args) {
@@ -123,25 +132,32 @@ public class Main implements Runnable {
 			config.put("ssl", args.get("ssl"));
 		if (args.containsKey("debug"))
 			config.put("debug", args.get("debug"));
-		
+
 		// Now everything should be okay and we can start the bot...
-		
-		this.engineThread = new Thread(this, "Main iUtil 2 Thread");
+
+		this.engineThread = new Thread(this, "iUtil 2 Main Thread");
 		//this.engine = this;
 		// Oh god.
 		start();
 
 	}
 
+	public void reconnect() {
+		this.engineThread.interrupt();
+		this.engineRunning = false;
+		this.engineThread = new Thread(this, "iUtil 2 Main Thread");
+		start();
+	}
+
 	public void log(String line) {
 		log(line, "DEBUG");
 	}
-	
+
 	public void log(String line, String type) {
 		String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
 		String out = time+" ["+type+"] "+line;
 		if (Boolean.valueOf(config.getProperty("debug")))
-				System.err.println(out.replaceAll("(\\r\\n|\\n\\r)", ""));
+			System.err.println(out.replaceAll("(\\r\\n|\\n\\r)", ""));
 		try {
 			logWriter.write(out+"\r\n");
 			logWriter.flush();
@@ -180,31 +196,31 @@ public class Main implements Runnable {
 	public void saveConfig() {
 		log("Attempting to save config to "+configFile.getAbsolutePath()+"...");
 		try {
-			config.store(new FileOutputStream(configFile), "iUtil 2 main Config");
+			config.store(new FileOutputStream(configFile), "iUtil 2 Main Config");
 		} catch (Exception e) {
 			log("Couldn't save config to "+configFile.getAbsolutePath()+"!");
 			e.printStackTrace();
 		}
 
 	}
-	
+
 	@SuppressWarnings("unused")
 	private void createConfigDefaults(String string, String string2) {
 		createConfigDefaults(string, string2, true);
 	}
-	
+
 	private void createConfigDefaults(String string, String string2, boolean check) {
 		HashMap<String, String> t = new HashMap<String, String>();
 		t.put(string, string2);
 		createConfigDefaults(t, check);
 	}
-	
+
 	public void createConfigDefaults(HashMap<String, String> c) {
 		createConfigDefaults(c, true);
 	}
-	
+
 	public void createConfigDefaults(HashMap<String, String> c, boolean check) {
-		log("Creating config entries...");
+		//log("Creating config entries...");
 		int additions = 0;
 		for (String k : c.keySet()) {
 			if (config.containsKey(k) && check)
@@ -218,7 +234,7 @@ public class Main implements Runnable {
 		if (additions > 0)
 			saveConfig();
 	}
-	
+
 	public void start() {
 		this.engineRunning = true;
 		this.engineThread.start();
@@ -226,17 +242,21 @@ public class Main implements Runnable {
 
 	@Override
 	public void run() {
-		
+
 		HashMap<String, String> defaultConfig = new HashMap<String, String>();
 		defaultConfig.put("connectModes", "+Bp-x");
 		defaultConfig.put("commandCharacters", "#@.!");
 		defaultConfig.put("publicCommandCharacters", "#@");
+		defaultConfig.put("quitMessageFormat", "QUIT command from %NICK%");
+		defaultConfig.put("partMessageFormat", "PART command from %NICK%");
+		defaultConfig.put("identificationString", "PRIVMSG NickServ :IDENTIFY %PASSWORD%");
+		defaultConfig.put("autoJoin", "#QuestHelp,#Peer.Dev,#AWeSome");
 		createConfigDefaults(defaultConfig);
-		
+
 		connection = new Socket();
-		
+
 		// Connecting to IRC
-		
+
 		log("Attempting to connect to "+config.getProperty("server")+":"+config.getProperty("port")+"/"+config.getProperty("ssl")+"...");
 		try {
 			if (Boolean.valueOf(config.getProperty("ssl"))) {
@@ -262,21 +282,21 @@ public class Main implements Runnable {
 		}
 		log("Created server connection.");
 		log(connection.toString());
-		
+
 		changeNick(config.getProperty("nick", DEFAULT_NICK));
 		log("Registered nick with server, waiting for response...");
-		
+
 		// On response from the server, go into a loop until we get RAW 251.
 		// If the server never sends this RAW, the bot will never exit this loop (possibly dangerous?)
-		
+
 		String line = "";
 		try {
 			// Connection data is parsed here, "regular" IRC traffic is parsed by Protocol.java
-			while ((line = in.readLine()) != null && this.engineRunning) {
+			while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
 				log("<- "+line, "IRC");
 				if (line.indexOf("001") >= 0) // Server address
 					this.CURRENT_SERVER = line.split(" ")[0].substring(1);
-				
+
 				else if (line.indexOf("005") >= 0) {	// Network settings	
 					if (NETWORK_SETTINGS == null)
 						NETWORK_SETTINGS = new HashMap<String, String>();
@@ -288,12 +308,12 @@ public class Main implements Runnable {
 						}
 					}
 				}
-				
+
 				else if (line.indexOf("004") >= 0) {
-					//TODO: Identify with the server
+					send(config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(readPassword())), false /* We have to remember not to log this line because passwords. */);
 					send("MODE "+CURRENT_NICK+" "+config.getProperty("connectModes"));
 				}
-				
+
 				else if (line.indexOf("433") >= 0) {
 					log("Nick is in use, trying "+CURRENT_NICK+"2");
 					String newNick = "";
@@ -306,7 +326,7 @@ public class Main implements Runnable {
 					}
 					changeNick(newNick);
 				}
-				
+
 				else if (line.indexOf("251") >= 0) {
 					CURRENT_NETWORK = NETWORK_SETTINGS.get("NETWORK");
 					if (CURRENT_NETWORK == null || CURRENT_NETWORK.equals(""))
@@ -314,42 +334,45 @@ public class Main implements Runnable {
 					log("Connected to the "+CURRENT_NETWORK+" network on server "+CURRENT_SERVER);
 					break;
 				}
-				
+
 			}
-			
+
 			//TODO: Temporary join of channels (which doesn't work).
-			String[] chans = "#QuestHelp,#Peer.Dev,#AweSome".split(",");
+			String[] chans = config.getProperty("autoJoin").split(",");
 			for (String a : chans)
 				joinChannel(a);
-			
+
 			Protocol protocol = new Protocol();
 			log("Protocol class is now handling incoming traffic.");
 			log(protocol.toString());
-			while ((line = in.readLine()) != null && this.engineRunning){
+			while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
 				protocol.parse(line, this);
 			}
-			
+
 		}
 		catch (IOException e) {
 			log("Connection error, cannot continue!");
 			e.printStackTrace();
 			System.exit(1);			
 		}
-			
+
 	}
 
 
 	public void changeNick(String nick) {
 		CURRENT_NICK = nick;
 		send("NICK "+nick+"\r\n");
-		send("USER "+nick+" ipeer.auron.co.uk "+nick+": iPeer's Java Utility Bot\r\n");
-		
+		if (!SERVER_REGISTERED) {
+			send("USER "+nick+" ipeer.auron.co.uk "+nick+": iPeer's Java Utility Bot\r\n");
+			SERVER_REGISTERED = true;
+		}
+
 	}
-	
+
 	public void send(String data) {
 		send(data, true);
 	}
-	
+
 	public void joinChannel(String channel) {
 		if (CHANNEL_LIST == null)
 			CHANNEL_LIST = new HashMap<String, Channel>();
@@ -358,17 +381,16 @@ public class Main implements Runnable {
 		log("Now in "+CHANNEL_LIST.size()+" channels.");
 		send("WHO "+channel);
 	}
-	
-	public void send(String data, boolean flush) {
+
+	public void send(String data, boolean log) {
 		try {
 			if (!(data.endsWith("\r\n") || data.endsWith("\n\r")))
 				data = data+"\r\n";
 			out.write(data);
-			if (flush)
-				out.flush();
-			if (Boolean.valueOf(config.getProperty("debug")))
-					log("-> "+data.replaceAll("\\[rn]", ""), "IRC");
-			
+			out.flush();
+			if (log)
+				log("-> "+data.replaceAll("\\[rn]", ""), "IRC");
+
 		} catch (IOException e) {
 			log("Couldn't send data to socket!");
 			e.printStackTrace();
@@ -377,6 +399,38 @@ public class Main implements Runnable {
 
 	public HashMap<String, Channel> getChannelList() {
 		return CHANNEL_LIST;
+	}
+
+	public void quit(String quitMessage) {
+		REQUESTED_QUIT = true;
+		send("QUIT :"+quitMessage);
+	}
+
+	public char[] readPassword() {
+		try {
+			log("Attempting to read password from file...");
+			File b = new File(configDir, "key");
+			File c = new File(configDir, "password");
+			DataInputStream f = new DataInputStream(new FileInputStream(b));
+			int x = f.readInt();
+			byte[] key = new byte[x];
+			f.readFully(key);
+			Key k = new SecretKeySpec(key, "AES");
+			f.close();
+			f = new DataInputStream(new FileInputStream(c));
+			x = f.readInt();
+			byte[] pass = new byte[x];
+			f.readFully(pass);
+			f.close();
+			Cipher aes = Cipher.getInstance("AES/ECB/PKCS5Padding");
+			aes.init(Cipher.DECRYPT_MODE, k);
+			log("Succesfully read password from file");
+			return new String(aes.doFinal(pass)).toCharArray();
+		} catch (Exception e) {
+			log("Couldn't read password from file!");
+			e.printStackTrace();
+			return new char[0];
+		} 
 	}
 
 

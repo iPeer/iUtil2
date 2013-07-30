@@ -8,11 +8,12 @@ import com.simple.ipeer.iutil2.irc.User;
 
 public class Protocol {
 
-	public Protocol () { }
+	public Protocol () {	}
 
 	public void parse(String line, Main engine) {
 		// We log the whole line for debug purposes
-		engine.log("<- "+line, "IRC");
+		if (engine != null)
+			engine.log("<- "+line, "IRC");
 		
 		
 		// When the server PINGs us, we need to make sure we reply.
@@ -21,25 +22,62 @@ public class Protocol {
 		
 		// Handle being disconnected by the server
 		else if (line.startsWith("ERROR :")) {
-			engine.log("Disconnected by server! "+line.substring(7));
+			engine.log("Disconnected! "+line.substring(7));
 			//TODO: For now, we just terminate. We'll make it try and reconnect later
-			System.exit(0);
+			if (engine.REQUESTED_QUIT)
+				System.exit(0);
+			else
+				engine.reconnect();
 		}
 
 		// Handle actual chat messages
 		else if (Arrays.asList("PRIVMSG", "NOTICE").contains(line.split(" ")[1])) {
-			// Reusing old code because it doesn't make sense to rewrite this.
-			String nick = line.split("!")[0].substring(1);
-			String address = "";
-			if (line.split(" ")[0].contains("!"))
-				address = line.split("!")[1].split(" ")[0];
-			String target = line.split(" ")[2];
+			String nick = "";
+			String address = nick;
+			String channel = nick;
+			//String type = line.split(" ")[1];
+			String[] data = line.split(" ");
+			//if (type.equals("NOTICE")) {
+			if (data[0].contains("!")) {
+				nick = data[0].split("!")[0].substring(1);
+				address = data[0].split("!")[1].split(" ")[0];
+			}
+			else {
+				nick = data[0].substring(1);
+				address = nick;
+			}
+			//}
+			channel = data[2];
 			String[] messageData = line.split(":");
 			String message = "";
 			for (int x = 2; x < messageData.length; x++) {
 				message = message+":"+messageData[x];
 			}
 			message = message.substring(1);	
+			
+			// Commands
+			
+			if (engine.config.getProperty("commandCharacters").contains(message.substring(0, 1))) {
+				String sendPrefix = (engine.config.getProperty("publicCommandCharacters").contains(message.substring(0, 1)) ? "PRIVMSG "+channel : "NOTICE "+nick);
+				boolean isAdmin = engine.getChannelList().get("#peer.dev").getUserList().get(nick).isOp();
+				String commandName = message.split(" ")[0].substring(1).toLowerCase();
+				
+				if (commandName.equals("quit") && isAdmin) {
+					String quitMessage = engine.config.getProperty("quitMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address);
+					engine.quit(quitMessage);
+				}
+				
+				else if (commandName.equals("part") && isAdmin) {
+					try {
+						engine.send("PART "+message.split(" ")[1]+" :"+engine.config.getProperty("partMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address));
+					}
+					catch (ArrayIndexOutOfBoundsException e) {
+						engine.send("PART "+channel+" :"+engine.config.getProperty("partMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address));
+					}
+				}
+				
+			}
+			
 		}
 		
 		else if (line.split(" ")[1].equals("NICK")) {
@@ -89,5 +127,13 @@ public class Protocol {
 		}
 
 	}
+	
+//	public static void main(String[] args) {
+//		String t = ":pandora.mo.ca.SwiftIRC.net NOTICE iUtil2 :*** Disabling usermode 'x' will reveal your IP address to anyone. If you did not intend this, use '/mode iUtil2 +x'";
+//		String t2 = ":iPeer!iPeer@13.33.33.37 NOTICE iUtil2 :Hi";
+//		Protocol a = new Protocol();
+//		a.parse(t, null);
+//		a.parse(t2, null);
+//	}
 
 }
