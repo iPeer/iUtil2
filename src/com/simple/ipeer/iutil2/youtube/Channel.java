@@ -8,8 +8,9 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -33,7 +34,7 @@ public class Channel implements Announcer, Runnable {
 	private long lastUpdate = 0L;
 	protected Main engine;
 	private YouTube youtube;
-	private HashMap<String, Upload> channelUploads;
+	private LinkedHashMap<String, Upload> channelUploads;
 	private String lastUpload = "";
 
 	public Channel (String name, Main engine, YouTube youtube) {
@@ -87,7 +88,7 @@ public class Channel implements Announcer, Runnable {
 	public void update() {
 		try {
 
-			List<Upload> announce = new ArrayList<Upload>();
+			LinkedList<Upload> announce = new LinkedList<Upload>();
 
 			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 			DocumentBuilder builder = factory.newDocumentBuilder();
@@ -102,8 +103,6 @@ public class Channel implements Announcer, Runnable {
 				String videoID = data.item(0).getChildNodes().item(0).getNodeValue().replaceAll("https?://gdata.youtube.com/feeds/api/videos/", "");
 				if (videoID.equals(this.lastUpload) || x > Integer.valueOf(engine.config.getProperty("youtubeMaxUploads")))
 					break;
-				if (x == 0)
-					this.lastUpload = videoID;
 				try {
 					String author = data.item(12).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();
 					if (!this.realChannelName.equals(author))
@@ -115,6 +114,8 @@ public class Channel implements Announcer, Runnable {
 				if (!channelUploads.containsKey(videoID)) {
 					Upload u = new Upload(title, duration, videoID);
 					channelUploads.put(videoID, u);
+					while (channelUploads.size() > Integer.valueOf(engine.config.getProperty("youtubeMaxHistory")))
+						channelUploads.remove(channelUploads.keySet().iterator().next());
 					announce.add(u);
 				}
 			}
@@ -148,12 +149,12 @@ public class Channel implements Announcer, Runnable {
 		}
 	}
 
-	public HashMap<String, Upload> loadCache() {
+	public LinkedHashMap<String, Upload> loadCache() {
 		File a = new File((engine == null ? "./YouTube" : engine.config.getProperty("youtubeDir")), "cache/"+this.channelName+".iuc");
 		try {
 			BufferedReader b = new BufferedReader(new FileReader(a));
 			String line = null;
-			HashMap<String, Upload> c = new HashMap<String, Upload>();
+			LinkedHashMap<String, Upload> c = new LinkedHashMap<String, Upload>();
 			while ((line = b.readLine()) != null) {
 
 				if (this.lastUpload.equals("") || this.lastUpload == null)
@@ -169,7 +170,7 @@ public class Channel implements Announcer, Runnable {
 			return c;
 		}
 		catch (IOException e) {
-			return new HashMap<String, Upload>();
+			return new LinkedHashMap<String, Upload>();
 		}
 	}
 
@@ -178,7 +179,7 @@ public class Channel implements Announcer, Runnable {
 		return (lastUpdate + Long.valueOf(engine.config.getProperty("youtubeUpdateDelay"))) - System.currentTimeMillis();
 	}
 
-	public void announce(List<Upload> uploads) {
+	public void announce(LinkedList<Upload> uploads) {
 		Iterator<Upload> it = uploads.iterator();
 		while (it.hasNext()) {
 			Upload u = it.next();
