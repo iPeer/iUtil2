@@ -59,6 +59,8 @@ public class Protocol {
 				address = nick;
 			}
 			channel = data[2];
+			if (channel.equals(engine.CURRENT_NICK))
+				channel = nick;
 			String[] messageData = line.split(":");
 			String message = "";
 			for (int x = 2; x < messageData.length; x++) {
