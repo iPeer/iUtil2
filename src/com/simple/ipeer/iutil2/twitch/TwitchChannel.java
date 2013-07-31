@@ -38,7 +38,7 @@ public class TwitchChannel implements Announcer, Runnable {
 
 
 	public static void main(String[] args) {
-		TwitchChannel a = new TwitchChannel("TotalBiscuit", null, null);
+		TwitchChannel a = new TwitchChannel("Pakratt0013", null, null);
 		a.update();
 	}
 
@@ -150,10 +150,10 @@ public class TwitchChannel implements Announcer, Runnable {
 			}
 			if (!outMessage.equals("")) {
 				outMessage = outMessage
-						.replaceAll("%(STREAM)?DESC%", streamDesc)
-						.replaceAll("%GAME(NAME)?%", gameName)
-						.replaceAll("%(STREAM)?QUALITY%", streamQuality+"p")
-						.replaceAll("%(STREAM)?ID%", streamID)
+						.replaceAll("%(STREAM)?DESC%", a.getProperty("lastStatus"))
+						.replaceAll("%GAME(NAME)?%", a.getProperty("lastGame"))
+						.replaceAll("%(STREAM)?QUALITY%", a.getProperty("lastQuality")+"p")
+						.replaceAll("%(STREAM)?ID%", a.getProperty("lastID"))
 						.replaceAll("%USER%", this.channelName)
 						.replaceAll("%URL%", (engine == null ? "https://twitch.tv/" : engine.config.getProperty("twitchURLPrefix"))+this.channelName);
 				if (engine != null)
