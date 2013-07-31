@@ -6,5 +6,8 @@ public interface Announcer {
 	public long timeTilUpdate();
 	public void stop();
 	public void start();
+	public void startIfNotRunning();
+	public void removeCache();
+	public void stopIfRunning();
 	
 }

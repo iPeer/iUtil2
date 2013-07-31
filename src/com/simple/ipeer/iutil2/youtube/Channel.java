@@ -30,17 +30,20 @@ public class Channel implements Announcer, Runnable {
 	private String channelName;
 	private String realChannelName;
 	private Thread thread;
-	private boolean running = false;
+	private boolean isRunning = false;
 	private long lastUpdate = 0L;
 	protected Main engine;
 	private YouTube youtube;
 	private LinkedHashMap<String, Upload> channelUploads;
 	private String lastUpload = "";
+	private boolean isSyncing = false;
+	private File cacheFile;
 
 	public Channel (String name, Main engine, YouTube youtube) {
 		this.channelName = this.realChannelName = name;
 		this.engine = engine;
 		this.youtube = youtube;
+		this.cacheFile = new File((engine == null ? "./YouTube" : engine.config.getProperty("youtubeDir")), "cache/"+this.channelName+".iuc");
 		this.channelUploads = loadCache();
 		//this.lastUpload = new Properties();
 	}
@@ -63,11 +66,11 @@ public class Channel implements Announcer, Runnable {
 
 	@Override
 	public void run() {
-		while (this.running && !this.thread.isInterrupted()) {
-			if (!youtube.waitingToSync.isEmpty()) {
+		while (this.isRunning && !this.thread.isInterrupted()) {
+			if (youtube != null && !youtube.waitingToSync.isEmpty()) {
 				Iterator<Channel> it = youtube.waitingToSync.iterator();
 				while (it.hasNext()) {
-					(it.next()).start();
+					(it.next()).startIfNotRunning();
 					it.remove();
 				}
 			}
@@ -82,6 +85,8 @@ public class Channel implements Announcer, Runnable {
 				e.printStackTrace();
 			}
 		}
+		if (engine != null)
+			engine.log("YouTube thread for user "+this.channelName+" ("+this.realChannelName+") is stopping.", "YouTube");
 	}
 
 	@Override
@@ -101,7 +106,7 @@ public class Channel implements Announcer, Runnable {
 			for (int x = 0; x < uploads.getLength() - 1; x++) {
 				NodeList data = uploads.item(x).getChildNodes();
 				String videoID = data.item(0).getChildNodes().item(0).getNodeValue().replaceAll("https?://gdata.youtube.com/feeds/api/videos/", "");
-				if (videoID.equals(this.lastUpload) || x > Integer.valueOf(engine.config.getProperty("youtubeMaxUploads")))
+				if (videoID.equals(this.lastUpload) || x > Integer.valueOf((this.isSyncing ? "0" : engine.config.getProperty("youtubeMaxUploads"))))
 					break;
 				try {
 					String author = data.item(12).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();
@@ -119,7 +124,8 @@ public class Channel implements Announcer, Runnable {
 					announce.add(u);
 				}
 			}
-
+			if (this.isSyncing)
+				this.isSyncing = false;
 			if (!announce.isEmpty()) {
 				lastUpload = announce.get(0).getID();
 				saveCache();
@@ -133,10 +139,9 @@ public class Channel implements Announcer, Runnable {
 	}
 
 	public void saveCache() throws FileNotFoundException, IOException {
-		File b = new File((engine == null ? "./YouTube" : engine.config.getProperty("youtubeDir")), "cache/"+this.channelName+".iuc");
-		if (b.exists())
-			b.delete();
-		BufferedWriter c = new BufferedWriter(new FileWriter(b));
+		if (this.cacheFile.exists())
+			this.cacheFile.delete();
+		BufferedWriter c = new BufferedWriter(new FileWriter(this.cacheFile));
 		c.write(lastUpload+"\n");
 		if (!channelUploads.isEmpty())
 		{
@@ -150,9 +155,8 @@ public class Channel implements Announcer, Runnable {
 	}
 
 	public LinkedHashMap<String, Upload> loadCache() {
-		File a = new File((engine == null ? "./YouTube" : engine.config.getProperty("youtubeDir")), "cache/"+this.channelName+".iuc");
 		try {
-			BufferedReader b = new BufferedReader(new FileReader(a));
+			BufferedReader b = new BufferedReader(new FileReader(this.cacheFile));
 			String line = null;
 			LinkedHashMap<String, Upload> c = new LinkedHashMap<String, Upload>();
 			while ((line = b.readLine()) != null) {
@@ -199,15 +203,7 @@ public class Channel implements Announcer, Runnable {
 					.replaceAll("%(VIDEO)?TITLE%", title)
 					.replaceAll("(%(VIDEO)?(LENGTH|DURATION)%)", time)
 					.replaceAll("%USER%", this.realChannelName)
-					.replaceAll("%C1%", Main.COLOUR+engine.config.getProperty("colour1"))
-					.replaceAll("%C2%", Main.COLOUR+engine.config.getProperty("colour2"))
-					.replaceAll("%B%", String.valueOf(Main.BOLD))
-					.replaceAll("%I%", String.valueOf(Main.ITALICS))
-					.replaceAll("%U%", String.valueOf(Main.UNDERLINE))
-					.replaceAll("%[HR]%", String.valueOf(Main.HIGHLIGHT))
-					.replaceAll("%E%", String.valueOf(Main.ENDALL))
-					.replaceAll("%VIDEOLINK%", engine.config.getProperty("youtubeURLPrefix")+vid)
-					.replaceAll("%DASH%", String.valueOf(Main.DASH));
+					.replaceAll("%VIDEOLINK%", engine.config.getProperty("youtubeURLPrefix")+vid);
 			if (engine == null)	
 				System.err.println(out);
 			else
@@ -217,20 +213,39 @@ public class Channel implements Announcer, Runnable {
 
 	@Override
 	public void stop() {
-		this.running = false;
+		this.isRunning = false;
 		(this.thread).interrupt();
 	}
 
 	@Override
 	public void start() {
+		if (engine != null)
+			engine.log("YouTube Announcer Thread "+this.channelName+" is starting", "YouTube");
 		this.thread = new Thread(this, "YouTube Announcer Thread ("+this.channelName+")");
-		this.running = true;
+		this.isRunning = true;
 		(this.thread).start();
+	}
+	
+	public void stopIfRunning() {
+		if (this.isRunning)
+			stop();
 	}
 
 	public void startIfNotRunning() {
-		if (!this.running)
+		if (!this.isRunning) {
 			start();
+		}
+	}
+	
+	public void setSyncing(boolean b) {
+		this.isSyncing = b;
+	}
+	
+	public void removeCache() {
+		if (this.cacheFile.exists()) {
+			if (!this.cacheFile.delete())
+				this.cacheFile.deleteOnExit();
+		}
 	}
 
 }

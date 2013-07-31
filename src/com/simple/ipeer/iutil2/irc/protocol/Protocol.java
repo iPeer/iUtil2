@@ -1,8 +1,11 @@
 package com.simple.ipeer.iutil2.irc.protocol;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
+import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.User;
@@ -12,6 +15,7 @@ public class Protocol {
 	public Protocol () {	}
 
 	public void handleDisconnect(Main engine, String message)  {
+		engine.isConnected = false;
 		engine.log("Disconnected! "+message);
 		if (engine.REQUESTED_QUIT)
 			System.exit(0);
@@ -110,6 +114,120 @@ public class Protocol {
 					}
 
 				}
+				
+				else if (commandName.matches("(info(mation)?|status)")) {
+					long totalMemory = Runtime.getRuntime().totalMemory();
+					long freeMemory = Runtime.getRuntime().freeMemory();
+					long usedMemory = totalMemory - freeMemory;
+					List<String> out = new ArrayList<String>();
+					out.add("Memory: "+(usedMemory / 1024L / 1024L)+"MB/"+(totalMemory / 1024L / 1024L)+"MB");
+					String threads = "";
+					for (String a : engine.getAnnouncers().keySet()) {
+						AnnouncerHandler ah = engine.getAnnouncers().get(a);
+						int ttu = (int)(ah.timeTilUpdate() / 1000L);
+						int seconds = ttu % 60;
+						int minutes = ttu / 60;
+						int hours = (int)(Math.floor(minutes / 60));
+						if (hours > 0)
+							minutes -= hours*60;
+						String time = (hours > 0 ? String.format("%02d", hours)+":" : "")+String.format("%02d", minutes)+":"+String.format("%02d", seconds);
+						threads = threads+(threads.length() > 0 ? ", " : "")+a+": "+time;
+					}
+					out.add("Announcers (updating in): "+threads);
+					out.add("Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+", C: "+System.getProperty("java.class.version")+" VM: "+System.getProperty("java.vm.version")+" / "+System.getProperty("java.vm.specification.version"));
+					out.add("OS: "+System.getProperty("os.name")+" / "+System.getProperty("os.version"));
+					engine.send(sendPrefix, out, true, false);				
+				}
+				
+				else if (commandName.equals("reconnect") && isAdmin) {
+					engine.quit("RECONNECT requested by "+nick, true);
+				}
+				
+				else if (commandName.equals("send") && isAdmin) {
+					engine.send(message.substring(6));
+				}
+				
+				else if (commandName.equals("config") && isAdmin) {
+					String d[] = message.split(" ");
+					if (d.length == 1) {
+						engine.send(sendPrefix+" :Invalid syntax, must provide at least a config entry.");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <entry> [value]");
+					}
+					else {
+						String entry = d[1];
+						if (engine.config.containsKey(entry)) {
+							engine.disableFormatProcessing();
+							if (d.length == 3) {
+								String oldValue = engine.config.getProperty(entry);
+								engine.config.put(entry, d[2]);
+								engine.send(sendPrefix+" :Config entry "+entry+" has been changed from "+oldValue+" to "+d[2]+".");
+								engine.saveConfig();
+							}
+							else {
+								engine.send(sendPrefix+" :Config entry "+entry+" is current set as "+engine.config.getProperty(entry));
+							}
+							engine.enableFormatProcessing();
+						}
+						else {
+							engine.send(sendPrefix+" :Config entry "+entry+" doesn't exist!");
+						}
+					}
+				}
+				
+				else if (commandName.matches("addy(ou)?t(ube)?(user(name)?)?") && isAdmin) {
+					try {
+						String user = message.split(" ")[1];
+						if (engine.getAnnouncers().get("YouTube").addUser(user))
+							engine.send(sendPrefix+" :Now watching "+user+" for YouTube uploads.");
+						else
+							engine.send(sendPrefix+" :"+user+" is already being watched for uploads!");
+					}
+					catch (ArrayIndexOutOfBoundsException e) {
+						engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to add.");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
+					}
+				}
+				else if (commandName.matches("(rem(ove)?|del(ete)?)y(ou)?t(ube)?(user(name)?)?") && isAdmin) {
+					try {
+						String user = message.split(" ")[1];
+						if (engine.getAnnouncers().get("YouTube").removeUser(user))
+							engine.send(sendPrefix+" :No longer watching "+user+" for YouTube uploads.");
+						else
+							engine.send(sendPrefix+" :"+user+" isn't being watched for uploads.");
+					}
+					catch (ArrayIndexOutOfBoundsException e) {
+						engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to remove.");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
+					}
+				}
+				
+				else if (commandName.matches("addtwitch(user(name)?)?") && isAdmin) {
+					try {
+						String user = message.split(" ")[1];
+						if (engine.getAnnouncers().get("Twitch").addUser(user))
+							engine.send(sendPrefix+" :Now watching "+user+" for streams.");
+						else
+							engine.send(sendPrefix+" :"+user+" is already being watched for streams!");
+					}
+					catch (ArrayIndexOutOfBoundsException e) {
+						engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to add.");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
+					}
+				}
+				else if (commandName.matches("(rem(ove)?|del(ete)?)twitch(user(name)?)?") && isAdmin) {
+					try {
+						String user = message.split(" ")[1];
+						if (engine.getAnnouncers().get("Twitch").removeUser(user))
+							engine.send(sendPrefix+" :No longer watching "+user+" for streams.");
+						else
+							engine.send(sendPrefix+" :"+user+" isn't being watched for streams.");
+					}
+					catch (ArrayIndexOutOfBoundsException e) {
+						engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to remove.");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
+					}
+				}
+				
 
 			}
 
@@ -168,16 +286,6 @@ public class Protocol {
 				engine.getChannelList().remove(channel);
 		}
 
-	}
-
-	public static void main(String[] args) {
-		//String t = ":pandora.mo.ca.SwiftIRC.net NOTICE iUtil2 :*** Disabling usermode 'x' will reveal your IP address to anyone. If you did not intend this, use '/mode iUtil2 +x'";
-		//String t2 = ":iPeer!iPeer@13.33.33.37 NOTICE iUtil2 :Hi";
-		String t3 = ":zpoon!i@kicked.fd.and.burned.a.pancake QUIT :Ping timeout";
-		Protocol a = new Protocol();
-		//a.parse(t, null);
-		//a.parse(t2, null);
-		a.parse(t3, null);
 	}
 
 }
