@@ -106,7 +106,7 @@ public class Channel implements Announcer, Runnable {
 			for (int x = 0; x < uploads.getLength() - 1; x++) {
 				NodeList data = uploads.item(x).getChildNodes();
 				String videoID = data.item(0).getChildNodes().item(0).getNodeValue().replaceAll("https?://gdata.youtube.com/feeds/api/videos/", "");
-				if (videoID.equals(this.lastUpload) || x > Integer.valueOf((this.isSyncing ? "0" : engine.config.getProperty("youtubeMaxUploads"))))
+				if (this.channelUploads.containsKey(videoID) || videoID.equals(this.lastUpload) || x > Integer.valueOf((this.isSyncing ? "0" : engine.config.getProperty("youtubeMaxUploads"))))
 					break;
 				try {
 					String author = data.item(12).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();

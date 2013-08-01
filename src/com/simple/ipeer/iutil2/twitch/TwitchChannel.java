@@ -131,7 +131,7 @@ public class TwitchChannel implements Announcer, Runnable {
 				 * 2 = Quality
 				 * 3 = game
 				 */
-				if (!(data.get(3)+data.get(1)).equals(gameName+streamDesc)) {
+				if (!(data.get(3)+data.get(1)+data.get(2)+data.get(0)).equals(gameName+streamDesc+streamQuality+streamID)) {
 					if (data.get(3).equals("") && data.get(1).equals("")) // No game OR desc
 						outMessage = (engine == null ? "%C2%%USER% %C1%is streaming [%C2%%STREAMQUALITY%%C1%] %DASH% %URL%" : engine.config.getProperty("twitchAnnounceFormatNoGameOrDesc"));
 					else if (data.get(3).equals("") && !data.get(1).equals("")) // No game, has desc

@@ -12,7 +12,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.net.SocketException;
-import java.rmi.ConnectException;
 import java.security.Key;
 import java.security.SecureRandom;
 import java.sql.Date;
@@ -26,6 +25,7 @@ import java.util.Properties;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -169,7 +169,7 @@ public class Main implements Runnable {
 		// Announcers and other threads that should run while the bot is
 
 		announcers = new HashMap<String, AnnouncerHandler>();
-		announcers.put("YouTube" ,new YouTube(this));
+		announcers.put("YouTube", new YouTube(this));
 		announcers.put("Twitch", new Twitch(this));
 
 		// Now everything should be okay and we can start the bot...
@@ -415,7 +415,7 @@ public class Main implements Runnable {
 				}
 
 			}
-			catch (SocketException e) { log("Server disconnected unexpectedly, attempting to reconnect."); reconnect(); }
+			catch (SocketException | SSLException e) { log("Server disconnected unexpectedly, attempting to reconnect."); reconnect(); }
 			catch (Exception e) {
 				log("Connection error, cannot continue!");
 				e.printStackTrace();

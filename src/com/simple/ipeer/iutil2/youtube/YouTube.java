@@ -30,7 +30,7 @@ public class YouTube implements AnnouncerHandler {
 		settings.put("youtubeDir", "./YouTube");
 		settings.put("youtubeURLPrefix", "https://youtu.be/");
 		settings.put("youtubeMaxUploads", "5");
-		settings.put("youtubeMaxHistory", "5");
+		settings.put("youtubeMaxHistory", "25");
 		engine.createConfigDefaults(settings);
 
 		File youtubeDir = new File(engine.config.getProperty("youtubeDir"));
