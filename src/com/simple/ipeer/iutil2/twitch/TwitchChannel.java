@@ -38,7 +38,8 @@ public class TwitchChannel implements Announcer, Runnable {
 
 
 	public static void main(String[] args) {
-		TwitchChannel a = new TwitchChannel("Pakratt0013", null, null);
+		TwitchChannel a = new TwitchChannel("Inker19", null, null);
+		a.removeCache();
 		a.update();
 	}
 
@@ -88,7 +89,9 @@ public class TwitchChannel implements Announcer, Runnable {
 				streamID = data.item(11).getFirstChild().getNodeValue();
 				// The Stream title changes place (doesn't that defeat the point of an API?), so we have to do it this way...
 				streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue();
-				streamQuality = data.item(17).getFirstChild().getNodeValue();
+				// Seems the quality can sometimes be contaminated by the title of the stream.
+				streamQuality = ((Element)data).getElementsByTagName("video_height").item(0).getFirstChild().getNodeValue();
+				//data.item(17).getFirstChild().getNodeValue();
 				gameName = data.item(27).getFirstChild().getNodeValue();
 				streamData.add(0, streamID);
 				streamData.add(1, streamDesc);
@@ -131,7 +134,7 @@ public class TwitchChannel implements Announcer, Runnable {
 				 * 2 = Quality
 				 * 3 = game
 				 */
-				if (!(data.get(3)+data.get(1)+data.get(2)+data.get(0)).equals(gameName+streamDesc+streamQuality+streamID)) {
+				if (!(data.get(3)+data.get(1)+data.get(2)).equals(gameName+streamDesc+streamQuality)) {
 					if (data.get(3).equals("") && data.get(1).equals("")) // No game OR desc
 						outMessage = (engine == null ? "%C2%%USER% %C1%is streaming [%C2%%STREAMQUALITY%%C1%] %DASH% %URL%" : engine.config.getProperty("twitchAnnounceFormatNoGameOrDesc"));
 					else if (data.get(3).equals("") && !data.get(1).equals("")) // No game, has desc

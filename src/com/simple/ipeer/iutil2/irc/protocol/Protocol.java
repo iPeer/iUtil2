@@ -146,7 +146,11 @@ public class Protocol {
 				}
 				
 				else if (commandName.equals("send") && isAdmin) {
-					engine.send(message.substring(6));
+					String toSend = message.substring(6);
+					if (toSend.substring(0,  4).toLowerCase().equals("nick"))
+						engine.changeNick(toSend.substring(5));
+					else
+						engine.send(message.substring(6));
 				}
 				
 				else if (commandName.equals("config") && isAdmin) {
