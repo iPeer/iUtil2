@@ -86,13 +86,15 @@ public class TwitchChannel implements Announcer, Runnable {
 			if (data.getLength() > 0) {
 				String gameName = "", streamDesc = "", streamQuality = "", streamID = "";
 				data = data.item(0).getChildNodes();
-				streamID = data.item(11).getFirstChild().getNodeValue();
+				streamID = ((Element)data).getElementsByTagName("id").item(0).getFirstChild().getNodeValue();
+				//data.item(11).getFirstChild().getNodeValue();
 				// The Stream title changes place (doesn't that defeat the point of an API?), so we have to do it this way...
 				streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue();
 				// Seems the quality can sometimes be contaminated by the title of the stream.
 				streamQuality = ((Element)data).getElementsByTagName("video_height").item(0).getFirstChild().getNodeValue();
 				//data.item(17).getFirstChild().getNodeValue();
-				gameName = data.item(27).getFirstChild().getNodeValue();
+				gameName = ((Element)data).getElementsByTagName("meta_game").item(0).getFirstChild().getNodeValue();
+				//data.item(27).getFirstChild().getNodeValue();
 				streamData.add(0, streamID);
 				streamData.add(1, streamDesc);
 				streamData.add(2, streamQuality);
