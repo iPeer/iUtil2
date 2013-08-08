@@ -30,7 +30,7 @@ public class Protocol {
 
 	public static void main(String[] args) {
 		Protocol p = new Protocol();
-		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :This is a really cool video, you should check it out! https://www.youtube.com/watch?v=0Itwi9NfIv4 hooray! https://www.youtube.com/watch?v=Fk6eRXZlP3Q", null);
+		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :http://www.youtube.com/watch?v=x_tEo6qfQFA", null);
 	}
 
 	public void parse(String line, Main engine) {
@@ -92,8 +92,8 @@ public class Protocol {
 
 			// YouTube Links
 
-			if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com|\\.be)/(watch\\?v=)?.*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
-				Matcher match = Pattern.compile((engine == null ? "(?<=https?://(www.)?youtu(be.com|\\.be)/(watch\\?v=)?).*?( |$)" : engine.config.getProperty("youtubeGetIDRegex"))).matcher(message);
+			if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com|.be)/(watch\\?v=)[^=].*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
+				Matcher match = Pattern.compile((engine == null ? "(?<=https?://(www.)?youtu(be.com|\\.be)/(watch\\?v=)?)[^=]*?( |$)" : engine.config.getProperty("youtubeGetIDRegex"))).matcher(message);
 				int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
 				int curVid = 1;
 				while (match.find() && curVid <= maxVids) {
@@ -111,20 +111,26 @@ public class Protocol {
 								.replaceAll("%LIKES%", ytdata.get("likes"))
 								.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
 								.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
-						if (engine != null) {
+						if (engine != null)
 							engine.send("PRIVMSG "+channel+" :"+out);
-							if (ytdata.containsKey("description")) {
-								String desc = "";
-								if ((engine == null ? "word" : engine.config.getProperty("youtubeDescriptionClippingMode")).equals("word"))
-									for (int x = 0; desc.length() < Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))); x++)
-										desc = desc+(desc.length() > 0 ? " " : "")+ytdata.get("description").split(" ")[x];
-								else
-									desc = ytdata.get("description").substring(0, Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))));
-								engine.send("PRIVMSG "+channel+" :"+(engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", desc+(desc.length() < ytdata.get("description").length() ? "..." : "")));			
-							}
-						}
 						else
 							System.err.println(out.replaceAll("%C([0-9]+)?%", ""));
+						if (ytdata.containsKey("description")) {
+							String desc = "";
+							if ((engine == null ? "word" : engine.config.getProperty("youtubeDescriptionClippingMode")).equals("word"))
+								for (int x = 0; desc.length() < Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))); x++) {
+									desc = desc+(desc.length() > 0 ? " " : "")+ytdata.get("description").split(" ")[x];
+									if (x == ytdata.get("description").split(" ").length - 1)
+										break;
+								}
+							else
+								desc = ytdata.get("description").substring(0, Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))));
+							String description = (engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", desc+(desc.length() < ytdata.get("description").length() ? "..." : ""));
+							if (engine == null)
+								System.err.println(description.replaceAll("%C([0-9]+)?%", ""));
+							else
+								engine.send("PRIVMSG "+channel+" :"+description);			
+						}
 					} catch (IOException e) {
 						if (engine != null)
 							engine.send("PRIVMSG "+channel+" :Video not found: "+videoid);
