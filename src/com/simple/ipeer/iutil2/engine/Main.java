@@ -213,7 +213,7 @@ public class Main implements Runnable {
 		if (Boolean.valueOf(config.getProperty("debug")))
 			System.out.println(out.replaceAll("(\\r\\n|\\n\\r)", ""));
 		try {
-			logWriter.write(out+"\r\n");
+			logWriter.write(out.replaceAll("(\\r\\n|\\n\\r)", "")+"\r\n");
 			logWriter.flush();
 		} 
 		catch (IOException e) {
@@ -278,9 +278,10 @@ public class Main implements Runnable {
 		//log("Creating config entries...");
 		int additions = 0;
 		for (String k : c.keySet()) {
-			if (config.containsKey(k) && check)
-				log("Entry "+k+" already present in config. ("+config.getProperty(k)+")");
-			else {
+//			if (config.containsKey(k) && check)
+//				log("Entry "+k+" already present in config. ("+config.getProperty(k)+")");
+//			else {
+			if (!config.containsKey(k) || !check) {
 				log("Creating default config entry: "+k+" = "+c.get(k));
 				config.put(k, c.get(k));
 				additions++;
@@ -471,9 +472,7 @@ public class Main implements Runnable {
 
 	public void send(String data, boolean log, boolean sendIfNotConnected) {
 		try {
-			if (!this.connection.isConnected()) // Even if we want to force send a message, it shouldn't be sent if we're absolutely not connected.
-				return;
-			if (!this.isConnected && !sendIfNotConnected) {
+			if (!this.connection.isConnected() && !sendIfNotConnected) {
 				log("Tried to send message while offline, queuing for sending when (if) we reconnect.");
 				this.offlineMessages.add(new OfflineMessage(data, log, sendIfNotConnected));
 				return;
@@ -483,8 +482,8 @@ public class Main implements Runnable {
 				data = data+"\r\n";
 			if (this.textFormatting)
 				data = data
-				.replaceAll("%C1%", Main.COLOUR+(config.getProperty("colour1")))
-				.replaceAll("%C2%", Main.COLOUR+(config.getProperty("colour2")))
+				.replaceAll("%C1%", Main.COLOUR+(String.format("%02d", Integer.valueOf(config.getProperty("colour1")))))
+				.replaceAll("%C2%", Main.COLOUR+(String.format("%02d", Integer.valueOf(config.getProperty("colour2")))))
 				.replaceAll("%C%", String.valueOf(Main.COLOUR))
 				.replaceAll("%B%", String.valueOf(Main.BOLD))
 				.replaceAll("%I%", String.valueOf(Main.ITALICS))

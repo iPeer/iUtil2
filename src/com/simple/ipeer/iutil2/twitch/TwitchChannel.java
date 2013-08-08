@@ -37,11 +37,11 @@ public class TwitchChannel implements Announcer, Runnable {
 	}
 
 
-	public static void main(String[] args) {
-		TwitchChannel a = new TwitchChannel("Inker19", null, null);
-		a.removeCache();
-		a.update();
-	}
+//	public static void main(String[] args) {
+//		TwitchChannel a = new TwitchChannel("Inker19", null, null);
+//		a.removeCache();
+//		a.update();
+//	}
 
 	@Override
 	public void run() {

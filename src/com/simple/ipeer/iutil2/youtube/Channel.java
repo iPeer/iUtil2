@@ -57,12 +57,12 @@ public class Channel implements Announcer, Runnable {
 	}
 
 
-	public static void main(String[] args) {
-		Channel c = new Channel("TheiPeer", null, null);
-		c.lastUpload = "ZeGXGYSTOtc";
-		c.update();
-
-	}
+//	public static void main(String[] args) {
+//		Channel c = new Channel("TheiPeer", null, new YouTube(null));
+//		c.lastUpload = "ZeGXGYSTOtc";
+//		c.update();
+//
+//	}
 
 	@Override
 	public void run() {
@@ -192,12 +192,7 @@ public class Channel implements Announcer, Runnable {
 
 			int len = u.getLength();
 
-			int seconds = len % 60;
-			int minutes = len / 60;
-			int hours = (int)Math.floor(minutes / 60);
-			if (hours > 0)
-				minutes -= hours*60;
-			String time = (hours > 0 ? String.format("%02d", hours)+":" : "")+String.format("%02d", minutes)+":"+String.format("%02d", seconds);
+			String time = youtube.formatTime(len);
 
 			String out = (engine == null ? "%C2%%USER% %C1%uploaded a video: %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1] %DASH% %C2%%VIDEOLINK%" : engine.config.getProperty("youtubeAnnounceFormat"))
 					.replaceAll("%(VIDEO)?TITLE%", title)

@@ -1,14 +1,19 @@
 package com.simple.ipeer.iutil2.irc.protocol;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.User;
+import com.simple.ipeer.iutil2.youtube.YouTube;
 
 public class Protocol {
 
@@ -21,6 +26,11 @@ public class Protocol {
 			System.exit(0);
 		else
 			engine.reconnect();
+	}
+
+	public static void main(String[] args) {
+		Protocol p = new Protocol();
+		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :This is a really cool video, you should check it out! https://www.youtube.com/watch?v=0Itwi9NfIv4 hooray! https://www.youtube.com/watch?v=Fk6eRXZlP3Q", null);
 	}
 
 	public void parse(String line, Main engine) {
@@ -59,7 +69,7 @@ public class Protocol {
 				address = nick;
 			}
 			channel = data[2];
-			if (channel.equals(engine.CURRENT_NICK))
+			if (engine != null && channel.equals(engine.CURRENT_NICK))
 				channel = nick;
 			String[] messageData = line.split(":");
 			String message = "";
@@ -80,10 +90,62 @@ public class Protocol {
 					engine.send("NOTICE "+nick+" :VERSION iUtil 2 version "+engine.BOT_VERSION+" Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+" ("+System.getProperty("os.name")+")");
 			}
 
+			// YouTube Links
+
+			if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com|\\.be)/(watch\\?v=)?.*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
+				Matcher match = Pattern.compile((engine == null ? "(?<=https?://(www.)?youtu(be.com|\\.be)/(watch\\?v=)?).*?( |$)" : engine.config.getProperty("youtubeGetIDRegex"))).matcher(message);
+				int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
+				int curVid = 1;
+				while (match.find() && curVid <= maxVids) {
+					curVid++;
+					String videoid = match.group().replaceAll("watch\\?v=", "").trim();
+					HashMap<String, String> ytdata = new HashMap<String, String>();
+					try {
+						ytdata = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getVideoInfo(videoid);
+						String out = (engine == null ? "%C1%[%C2%%USER%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] (%C2%%VIEWS%%C1% views, %C2%%COMMENTS%%C1% comments, %C2%%LIKES%%C1% likes, %C2%%DISLIKES%%C1% dislikes) %DASH% %VIDEOURL%" : engine.config.getProperty("youtubeInfoFormat"))
+								.replaceAll("%USER%", ytdata.get("author"))
+								.replaceAll("%(VIDEO)?TITLE%", ytdata.get("title"))
+								.replaceAll("%(VIDEO)?LENGTH%", ytdata.get("duration"))
+								.replaceAll("%VIEWS%", ytdata.get("views"))
+								.replaceAll("%COMMENTS%", ytdata.get("comments"))
+								.replaceAll("%LIKES%", ytdata.get("likes"))
+								.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
+								.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
+						if (engine != null) {
+							engine.send("PRIVMSG "+channel+" :"+out);
+							if (ytdata.containsKey("description")) {
+								String desc = "";
+								if ((engine == null ? "word" : engine.config.getProperty("youtubeDescriptionClippingMode")).equals("word"))
+									for (int x = 0; desc.length() < Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))); x++)
+										desc = desc+(desc.length() > 0 ? " " : "")+ytdata.get("description").split(" ")[x];
+								else
+									desc = ytdata.get("description").substring(0, Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))));
+								engine.send("PRIVMSG "+channel+" :"+(engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", desc+(desc.length() < ytdata.get("description").length() ? "..." : "")));			
+							}
+						}
+						else
+							System.err.println(out.replaceAll("%C([0-9]+)?%", ""));
+					} catch (IOException e) {
+						if (engine != null)
+							engine.send("PRIVMSG "+channel+" :Video not found: "+videoid);
+						else
+							System.err.println("Video not found: "+videoid);
+						e.printStackTrace();
+					}
+					catch (Exception e) {
+						if (engine != null)
+							engine.send("PRIVMSG "+channel+" :An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
+						else
+							System.err.println("An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
+						e.printStackTrace();
+					}
+				}
+			}
+
 
 			// Commands
 
-			if (engine.config.getProperty("commandCharacters").contains(message.substring(0, 1))) {
+			if (engine != null && engine.config.getProperty("commandCharacters").contains(message.substring(0, 1))) {
 				String sendPrefix = (engine.config.getProperty("publicCommandCharacters").contains(message.substring(0, 1)) ? "PRIVMSG "+channel : "NOTICE "+nick);
 				String commandPrefix = message.substring(0, 1);
 				boolean isAdmin = engine.getChannelList().get("#peer.dev").getUserList().get(nick).isOp();
@@ -116,7 +178,7 @@ public class Protocol {
 					}
 
 				}
-				
+
 				else if (commandName.matches("(info(mation)?|status)")) {
 					long totalMemory = Runtime.getRuntime().totalMemory();
 					long freeMemory = Runtime.getRuntime().freeMemory();
@@ -140,11 +202,11 @@ public class Protocol {
 					out.add("OS: "+System.getProperty("os.name")+" / "+System.getProperty("os.version"));
 					engine.send(sendPrefix, out, true, false);				
 				}
-				
+
 				else if (commandName.equals("reconnect") && isAdmin) {
 					engine.quit("RECONNECT requested by "+nick, true);
 				}
-				
+
 				else if (commandName.equals("send") && isAdmin) {
 					String toSend = message.substring(6);
 					if (toSend.substring(0,  4).toLowerCase().equals("nick"))
@@ -152,7 +214,7 @@ public class Protocol {
 					else
 						engine.send(message.substring(6));
 				}
-				
+
 				else if (commandName.equals("config") && isAdmin) {
 					String d[] = message.split(" ");
 					if (d.length == 1) {
@@ -179,7 +241,7 @@ public class Protocol {
 						}
 					}
 				}
-				
+
 				else if (commandName.matches("addy(ou)?t(ube)?(user(name)?)?") && isAdmin) {
 					try {
 						String user = message.split(" ")[1];
@@ -206,7 +268,7 @@ public class Protocol {
 						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
 					}
 				}
-				
+
 				else if (commandName.matches("addtwitch(user(name)?)?") && isAdmin) {
 					try {
 						String user = message.split(" ")[1];
@@ -233,7 +295,7 @@ public class Protocol {
 						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
 					}
 				}
-				
+
 
 			}
 
