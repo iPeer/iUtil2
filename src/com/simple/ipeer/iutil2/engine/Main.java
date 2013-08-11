@@ -223,7 +223,7 @@ public class Main implements Runnable {
 
 	}
 
-	private void loadConfig() {
+	public void loadConfig() {
 		log("Attempting to load config from "+configFile.getAbsolutePath()+"...");
 		if (config == null)
 			config = new Properties();
@@ -299,7 +299,7 @@ public class Main implements Runnable {
 	@Override
 	public void run() {
 
-		connection = new Socket();
+		setConnection(new Socket());
 
 		// Connecting to IRC
 
@@ -313,12 +313,12 @@ public class Main implements Runnable {
 				SSLSocket ssls = (SSLSocket)sslsf.createSocket(config.getProperty("server"), Integer.valueOf(config.getProperty("port")));
 				in = new BufferedReader(new InputStreamReader(ssls.getInputStream()));
 				out = new BufferedWriter(new OutputStreamWriter(ssls.getOutputStream()));
-				connection = ssls;
+				setConnection(ssls);
 			}
 			else {
-				connection = new Socket(config.getProperty("server"), Integer.valueOf(config.getProperty("port")));
-				in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-				out = new BufferedWriter(new OutputStreamWriter(connection.getOutputStream()));
+				setConnection(new Socket(config.getProperty("server"), Integer.valueOf(config.getProperty("port"))));
+				in = new BufferedReader(new InputStreamReader(getConnection().getInputStream()));
+				out = new BufferedWriter(new OutputStreamWriter(getConnection().getOutputStream()));
 			}
 		}
 		catch (Exception | Error e) {
@@ -330,10 +330,10 @@ public class Main implements Runnable {
 			e.printStackTrace();
 			System.exit(1);
 		}*/
-		if (connection.isConnected()) {
+		if (getConnection().isConnected()) {
 			this.connectionRetries = 0;
 			log("Connected to server "+config.getProperty("server")+":"+config.getProperty("port")+".");
-			log(connection.toString());
+			log(getConnection().toString());
 
 			changeNick(config.getProperty("nick", DEFAULT_NICK));
 			log("Registered nick with server, waiting for response...");
@@ -472,7 +472,7 @@ public class Main implements Runnable {
 
 	public void send(String data, boolean log, boolean sendIfNotConnected) {
 		try {
-			if (!this.connection.isConnected() && !sendIfNotConnected) {
+			if (!this.getConnection().isConnected() && !sendIfNotConnected) {
 				log("Tried to send message while offline, queuing for sending when (if) we reconnect.");
 				this.offlineMessages.add(new OfflineMessage(data, log, sendIfNotConnected));
 				return;
@@ -570,6 +570,14 @@ public class Main implements Runnable {
 
 	public void enableFormatProcessing() {
 		this.textFormatting = true;
+	}
+
+	public Socket getConnection() {
+		return connection;
+	}
+
+	public void setConnection(Socket connection) {
+		this.connection = connection;
 	}
 
 

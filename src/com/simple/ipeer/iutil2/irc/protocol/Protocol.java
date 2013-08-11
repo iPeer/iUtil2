@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -30,7 +31,7 @@ public class Protocol {
 
 	public static void main(String[] args) {
 		Protocol p = new Protocol();
-		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :http://www.youtube.com/watch?v=x_tEo6qfQFA", null);
+		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :http://youtube.com/watch?v=&v=&v=&v=", null);
 	}
 
 	public void parse(String line, Main engine) {
@@ -92,13 +93,17 @@ public class Protocol {
 
 			// YouTube Links
 
-			if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com|.be)/(watch\\?v=)[^=].*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
-				Matcher match = Pattern.compile((engine == null ? "(?<=https?://(www.)?youtu(be.com|\\.be)/(watch\\?v=)?)[^=]*?( |$)" : engine.config.getProperty("youtubeGetIDRegex"))).matcher(message);
+			if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
 				int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
 				int curVid = 1;
-				while (match.find() && curVid <= maxVids) {
-					curVid++;
-					String videoid = match.group().replaceAll("watch\\?v=", "").trim();
+				String[] vids = message.split("(.be/|v=)");
+				for (int vn = 1; vn < vids.length && curVid++ <= maxVids; vn++) {
+					String videoid = "";
+					try {
+						videoid = vids[vn].split("[& ]")[0];
+					} catch (ArrayIndexOutOfBoundsException e) { continue; }
+					if (engine == null)
+						System.err.println(videoid);
 					HashMap<String, String> ytdata = new HashMap<String, String>();
 					try {
 						ytdata = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getVideoInfo(videoid);
@@ -117,12 +122,12 @@ public class Protocol {
 							System.err.println(out.replaceAll("%C([0-9]+)?%", ""));
 						if (ytdata.containsKey("description")) {
 							String desc = "";
-							if ((engine == null ? "word" : engine.config.getProperty("youtubeDescriptionClippingMode")).equals("word"))
-								for (int x = 0; desc.length() < Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))); x++) {
-									desc = desc+(desc.length() > 0 ? " " : "")+ytdata.get("description").split(" ")[x];
-									if (x == ytdata.get("description").split(" ").length - 1)
-										break;
+							if ((engine == null ? "word" : engine.config.getProperty("youtubeDescriptionClippingMode")).equals("word")) {
+								String[] descData = ytdata.get("description").split(" ");
+								for (int x = 0; x < descData.length && desc.length() < Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))); x++) {
+									desc = desc+(desc.length() > 0 ? " " : "")+descData[x];
 								}
+							}
 							else
 								desc = ytdata.get("description").substring(0, Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))));
 							String description = (engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", desc+(desc.length() < ytdata.get("description").length() ? "..." : ""));
@@ -151,15 +156,31 @@ public class Protocol {
 
 			// Commands
 
-			if (engine != null && engine.config.getProperty("commandCharacters").contains(message.substring(0, 1))) {
-				String sendPrefix = (engine.config.getProperty("publicCommandCharacters").contains(message.substring(0, 1)) ? "PRIVMSG "+channel : "NOTICE "+nick);
+			if ((engine == null ? "@#.!" : engine.config.getProperty("commandCharacters")).contains(message.substring(0, 1))) {
+				String sendPrefix = ((engine == null ? "#@" : engine.config.getProperty("publicCommandCharacters")).contains(message.substring(0, 1)) ? "PRIVMSG "+channel : "NOTICE "+nick);
 				String commandPrefix = message.substring(0, 1);
-				boolean isAdmin = engine.getChannelList().get("#peer.dev").getUserList().get(nick).isOp();
+				boolean isAdmin = (engine == null ? true : engine.getChannelList().get("#peer.dev").getUserList().get(nick).isOp());
 				String commandName = message.split(" ")[0].substring(1).toLowerCase();
+
+				System.err.println(commandName+", "+sendPrefix+", "+commandPrefix);
 
 				if (commandName.equals("quit") && isAdmin) {
 					String quitMessage = engine.config.getProperty("quitMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address);
 					engine.quit(quitMessage);
+				}
+
+				else if (commandName.equals("reloadconfig") && isAdmin) {
+					engine.send(sendPrefix+" :Attempting to reload config...");
+					Properties oldConfig = engine.config; // In case it fails.
+					try {
+						engine.config.clear();
+						engine.loadConfig();
+						engine.send(sendPrefix+" :Reloaded config succesfully. Some changes may not take effect immediately.");
+					} catch (Exception e) { 
+						engine.config = oldConfig;
+						engine.send(sendPrefix+" :Could reload config: "+e.toString()+" at "+e.getStackTrace()[0]);
+						e.printStackTrace();
+					}
 				}
 
 				else if (commandName.equals("part") && isAdmin) {
@@ -206,6 +227,7 @@ public class Protocol {
 					out.add("Announcers (updating in): "+threads);
 					out.add("Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+", C: "+System.getProperty("java.class.version")+" VM: "+System.getProperty("java.vm.version")+" / "+System.getProperty("java.vm.specification.version"));
 					out.add("OS: "+System.getProperty("os.name")+" / "+System.getProperty("os.version"));
+					out.add("Connection: "+engine.getConnection().toString());
 					engine.send(sendPrefix, out, true, false);				
 				}
 
