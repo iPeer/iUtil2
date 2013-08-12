@@ -25,9 +25,9 @@ import com.simple.ipeer.iutil2.engine.Main;
 
 public class YouTube implements AnnouncerHandler {
 
-	public HashMap<String, Channel> CHANNEL_LIST;
+	public HashMap<String, YouTubeChannel> CHANNEL_LIST;
 	protected Main engine;
-	public List<Channel> waitingToSync = new ArrayList<Channel>();
+	public List<YouTubeChannel> waitingToSync = new ArrayList<YouTubeChannel>();
 	private boolean hasStarted = false;
 
 	public YouTube(Main engine) {
@@ -71,7 +71,7 @@ public class YouTube implements AnnouncerHandler {
 	}
 
 	public void loadChannels() {
-		CHANNEL_LIST = new HashMap<String, Channel>();
+		CHANNEL_LIST = new HashMap<String, YouTubeChannel>();
 		File a = new File(new File(engine.config.getProperty("youtubeDir"), "config"), "usernames.cfg");
 		String[] channels = "TheiPeer,GuudeBoulderfist,EthosLab,Docm77,BdoubleO100,VintageBeef,GenerikB".split(",");
 
@@ -83,11 +83,11 @@ public class YouTube implements AnnouncerHandler {
 			}
 			catch (Exception e) {
 				engine.log("Couldn't load username list!", "YouTube");
-				e.printStackTrace();
+				engine.logError(e, "YouTube");
 			}
 		}
 		for (String c : channels) {
-			Channel d = new Channel(c, engine, this);
+			YouTubeChannel d = new YouTubeChannel(c, engine, this);
 			d.setSyncing(true); // Stops the bot spamming the hell out of channels after downtime or accidental cache invalidation.
 			//d.startIfNotRunning();
 			//waitingToSync.add(d);
@@ -100,7 +100,7 @@ public class YouTube implements AnnouncerHandler {
 		try {
 			File a = new File(new File(engine.config.getProperty("youtubeDir"), "config"), "usernames.cfg");
 			String users = "";
-			for (Channel c : this.CHANNEL_LIST.values())
+			for (YouTubeChannel c : this.CHANNEL_LIST.values())
 				users = users+c.getName()+",";
 			Properties b = new Properties();
 			b.setProperty("users", users);
@@ -109,12 +109,12 @@ public class YouTube implements AnnouncerHandler {
 		catch (Exception e) {
 			if (engine != null)
 				engine.log("Couldn't save youtube username list!", "YouTube");
-			e.printStackTrace();
+			engine.logError(e, "YouTube");
 		}
 	}
 
 	public void stopAll() {
-		for (Channel c : CHANNEL_LIST.values()) {
+		for (YouTubeChannel c : CHANNEL_LIST.values()) {
 			if (engine != null)
 				engine.log("Stopping YouTube thread for user "+c.getName(), "YouTube");
 			c.stop();
@@ -122,7 +122,7 @@ public class YouTube implements AnnouncerHandler {
 	}
 
 	public void startAll() {
-		for (Channel c : CHANNEL_LIST.values()) {
+		for (YouTubeChannel c : CHANNEL_LIST.values()) {
 			c.startIfNotRunning();
 		}
 	}
@@ -138,7 +138,7 @@ public class YouTube implements AnnouncerHandler {
 	public boolean addUser(String name) {
 		if (this.CHANNEL_LIST.containsKey(name.toLowerCase()))
 			return false;
-		Channel a = new Channel(name, engine, this);
+		YouTubeChannel a = new YouTubeChannel(name, engine, this);
 		a.setSyncing(true);
 		a.update();
 		this.CHANNEL_LIST.put(name.toLowerCase(), a);
@@ -153,7 +153,7 @@ public class YouTube implements AnnouncerHandler {
 	public boolean removeUser(String name) {
 		if (this.CHANNEL_LIST.containsKey(name.toLowerCase())) {
 			if (!this.waitingToSync.isEmpty()) {
-				Iterator<Channel> it = this.waitingToSync.iterator();
+				Iterator<YouTubeChannel> it = this.waitingToSync.iterator();
 				while (it.hasNext())
 					if (it.next().getName().toLowerCase().equals(name.toLowerCase())) {
 						it.remove();
@@ -161,7 +161,7 @@ public class YouTube implements AnnouncerHandler {
 							engine.log(name+" was waiting to sync, but its removal is being requested.", "YouTube");
 					}
 			}
-			Channel c = this.CHANNEL_LIST.get(name.toLowerCase());
+			YouTubeChannel c = this.CHANNEL_LIST.get(name.toLowerCase());
 			c.removeCache();
 			c.stopIfRunning();
 			this.CHANNEL_LIST.remove(name.toLowerCase());
@@ -173,7 +173,7 @@ public class YouTube implements AnnouncerHandler {
 
 	@Override
 	public void updateAll() {
-		for (Channel c : this.CHANNEL_LIST.values())
+		for (YouTubeChannel c : this.CHANNEL_LIST.values())
 			c.update();
 	}
 

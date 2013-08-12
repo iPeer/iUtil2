@@ -25,7 +25,7 @@ import org.xml.sax.SAXException;
 import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.Main;
 
-public class Channel implements Announcer, Runnable {
+public class YouTubeChannel implements Announcer, Runnable {
 
 	private String channelName;
 	private String realChannelName;
@@ -39,7 +39,7 @@ public class Channel implements Announcer, Runnable {
 	private boolean isSyncing = false;
 	private File cacheFile;
 
-	public Channel (String name, Main engine, YouTube youtube) {
+	public YouTubeChannel (String name, Main engine, YouTube youtube) {
 		this.channelName = this.realChannelName = name;
 		this.engine = engine;
 		this.youtube = youtube;
@@ -68,7 +68,7 @@ public class Channel implements Announcer, Runnable {
 	public void run() {
 		while (this.isRunning && !this.thread.isInterrupted()) {
 			if (youtube != null && !youtube.waitingToSync.isEmpty()) {
-				Iterator<Channel> it = youtube.waitingToSync.iterator();
+				Iterator<YouTubeChannel> it = youtube.waitingToSync.iterator();
 				while (it.hasNext()) {
 					(it.next()).startIfNotRunning();
 					it.remove();
@@ -82,7 +82,7 @@ public class Channel implements Announcer, Runnable {
 			catch (InterruptedException e) { }
 			catch (Exception e) {
 				engine.log("["+this.channelName+"] Cannot update!", "YouTube");
-				e.printStackTrace();
+				engine.logError(e, "YouTube");
 			}
 		}
 		if (engine != null)
@@ -134,7 +134,7 @@ public class Channel implements Announcer, Runnable {
 
 		} catch (ParserConfigurationException | SAXException | IOException e) {
 			engine.log("Couldn't update YouTube uploads for user "+this.channelName);
-			e.printStackTrace();
+			engine.logError(e, "YouTube");
 		}
 	}
 

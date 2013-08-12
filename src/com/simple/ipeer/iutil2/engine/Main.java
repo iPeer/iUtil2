@@ -59,7 +59,9 @@ public class Main implements Runnable {
 	public File configFile;
 	public File logDir;
 	public File logFile;
+	public File errorFile;
 	public FileWriter logWriter;
+	public FileWriter errorWriter;
 	public String CURRENT_NICK;
 	public Boolean REQUESTED_QUIT = false;
 
@@ -123,13 +125,14 @@ public class Main implements Runnable {
 		if (!logDir.exists())
 			logDir.mkdirs();
 		logFile = new File(logDir, "main.log");
-
+		errorFile = new File(logDir, "error.log");
 		try {
 			logWriter = new FileWriter(logFile, true);
+			errorWriter = new FileWriter(errorFile, true);
 		}
 		catch (IOException e) {
 			System.err.println("Couldn't create logging object, cannot continue!");
-			e.printStackTrace();
+			logError(e);
 			System.exit(1);
 		}
 
@@ -192,7 +195,7 @@ public class Main implements Runnable {
 			Thread.sleep(Long.valueOf(config.getProperty("reconnectDelay")));
 		} catch (Exception e) {
 			log("Reconnect thread failed to sleep, terminating for safety purposes.");
-			e.printStackTrace();
+			logError(e);
 			System.exit(1);
 		}
 		log("Connection rety #"+this.connectionRetries);
@@ -218,7 +221,42 @@ public class Main implements Runnable {
 		} 
 		catch (IOException e) {
 			System.err.println("Cannot write to log file!");
+			logError(e);
+		}
+
+	}
+	
+	public void logException(Throwable e) {
+		logError(e, "GENERAL");
+	}
+	
+	public void logException(Throwable e, String type) {
+		logError(e, type);
+	}
+	
+	public void logError(Throwable e) {
+		logError(e, "GENERAL");
+	}
+	
+	public void logError(Throwable e, String type) {
+		String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
+		//String out = time+" ["+type+"] "+;
+		List<String> out = new ArrayList<String>();
+		out.add("---- Caught "+type+" exception at "+time.toUpperCase()+" ----\n");
+		out.add(e.toString());
+		for (StackTraceElement a : e.getStackTrace())
+			out.add("        at "+a.toString());
+		out.add("\n---- End of stack trace ----\n\n");
+		if (config.containsKey("debug") && config.getProperty("debug").equals("true"))
 			e.printStackTrace();
+		try {
+			for (String a : out)
+				errorWriter.write(a+"\r\n");
+			errorWriter.flush();
+		} 
+		catch (IOException e1) {
+			System.err.println("Cannot write to log file!");
+			e1.printStackTrace(); // Probably the old error that should ever be printed like this (unless we're in debug mode, of course)
 		}
 
 	}
@@ -241,7 +279,7 @@ public class Main implements Runnable {
 			} 
 			catch (Exception e) {
 				log("Couldn't load options from file "+configFile.getAbsolutePath()+"!");
-				e.printStackTrace();
+				logError(e);
 			}
 		}
 		log("Config loaded succesfully.");
@@ -254,7 +292,7 @@ public class Main implements Runnable {
 			log("Config succesfully saved.");
 		} catch (Exception e) {
 			log("Couldn't save config to "+configFile.getAbsolutePath()+"!");
-			e.printStackTrace();
+			logError(e);
 		}
 
 	}
@@ -327,7 +365,7 @@ public class Main implements Runnable {
 		}
 		/*		catch (Exception | Error e) {
 			log("FAILED to connect to server, cannot continue!");
-			e.printStackTrace();
+			logError(e);
 			System.exit(1);
 		}*/
 		if (getConnection().isConnected()) {
@@ -419,7 +457,7 @@ public class Main implements Runnable {
 			catch (SocketException | SSLException e) { log("Server disconnected unexpectedly, attempting to reconnect."); reconnect(); }
 			catch (Exception e) {
 				log("Connection error, cannot continue!");
-				e.printStackTrace();
+				logError(e);
 				System.exit(1);			
 			}
 		}
@@ -498,7 +536,7 @@ public class Main implements Runnable {
 
 		} catch (IOException e) {
 			log("Couldn't send data to socket!");
-			e.printStackTrace();
+			logError(e);
 		}
 	}
 
@@ -539,7 +577,7 @@ public class Main implements Runnable {
 			return new String(aes.doFinal(pass)).toCharArray();
 		} catch (Exception e) {
 			log("Couldn't read password from file!");
-			e.printStackTrace();
+			logError(e);
 			return new char[0];
 		} 
 	}

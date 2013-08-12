@@ -1,14 +1,13 @@
 package com.simple.ipeer.iutil2.irc.protocol;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
@@ -141,14 +140,14 @@ public class Protocol {
 							engine.send("PRIVMSG "+channel+" :Video not found: "+videoid);
 						else
 							System.err.println("Video not found: "+videoid);
-						e.printStackTrace();
+						engine.logError(e);
 					}
 					catch (Exception e) {
 						if (engine != null)
 							engine.send("PRIVMSG "+channel+" :An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
 						else
 							System.err.println("An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
-						e.printStackTrace();
+						engine.logError(e);
 					}
 				}
 			}
@@ -162,13 +161,15 @@ public class Protocol {
 				boolean isAdmin = (engine == null ? true : engine.getChannelList().get("#peer.dev").getUserList().get(nick).isOp());
 				String commandName = message.split(" ")[0].substring(1).toLowerCase();
 
-				System.err.println(commandName+", "+sendPrefix+", "+commandPrefix);
-
 				if (commandName.equals("quit") && isAdmin) {
 					String quitMessage = engine.config.getProperty("quitMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address);
 					engine.quit(quitMessage);
 				}
 
+				else if (commandName.equals("throwexception") && isAdmin) {
+					engine.logError(new Exception("Forced debug exception"), "DEBUG");
+				}
+				
 				else if (commandName.equals("reloadconfig") && isAdmin) {
 					engine.send(sendPrefix+" :Attempting to reload config...");
 					Properties oldConfig = engine.config; // In case it fails.
@@ -179,7 +180,7 @@ public class Protocol {
 					} catch (Exception e) { 
 						engine.config = oldConfig;
 						engine.send(sendPrefix+" :Could reload config: "+e.toString()+" at "+e.getStackTrace()[0]);
-						e.printStackTrace();
+						engine.logError(e);
 					}
 				}
 

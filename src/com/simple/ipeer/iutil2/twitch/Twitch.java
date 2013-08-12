@@ -60,7 +60,7 @@ public class Twitch implements AnnouncerHandler {
 		} catch (IOException e) {
 			if (engine != null)
 				engine.log("Couldn't save Twitch channels!", "Twitch");
-			e.printStackTrace();
+			engine.logError(e);
 		}
 	}
 	

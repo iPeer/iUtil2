@@ -63,7 +63,7 @@ public class TwitchChannel implements Announcer, Runnable {
 			catch (Exception e) { 
 				if (engine != null)
 					engine.log("An error occurred during run() method of twitch user "+this.channelName, "Twitch");
-				e.printStackTrace();
+				engine.logError(e, "Twitch");
 			}
 		}
 		if (engine != null)
@@ -105,7 +105,7 @@ public class TwitchChannel implements Announcer, Runnable {
 		catch (Exception e) {
 			if (engine != null)
 				engine.log("There was a problem while updating Twitch user "+this.channelName);
-			e.printStackTrace();
+			engine.logError(e, "Twitch");
 		}
 
 
@@ -170,7 +170,7 @@ public class TwitchChannel implements Announcer, Runnable {
 		catch (IOException e) { 
 			if (engine != null)
 				engine.log("Couldn't announce twitch status for user "+this.channelName, "Twitch");
-			e.printStackTrace();
+			engine.logError(e, "Twitch");
 		}
 	}
 
