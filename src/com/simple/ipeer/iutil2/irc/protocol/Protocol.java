@@ -170,6 +170,19 @@ public class Protocol {
 					engine.logError(new Exception("Forced debug exception"), "DEBUG");
 				}
 				
+				else if (commandName.matches("force(y(ou)?t(ube)?)?update") && isAdmin) {
+					long start = System.currentTimeMillis();
+					engine.send(sendPrefix+" :Updating all YouTube threads...");
+					engine.getAnnouncers().get("YouTube").updateAll();
+					engine.send(sendPrefix+" :Finished updating all YouTube threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
+				}
+				else if (commandName.equals("forcetwitchupdate") && isAdmin) {
+					long start = System.currentTimeMillis();
+					engine.send(sendPrefix+" :Updating all Twitch threads...");
+					engine.getAnnouncers().get("Twitch").updateAll();
+					engine.send(sendPrefix+" :Finished updating all Twitch threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
+				}
+				
 				else if (commandName.equals("reloadconfig") && isAdmin) {
 					engine.send(sendPrefix+" :Attempting to reload config...");
 					Properties oldConfig = engine.config; // In case it fails.
@@ -337,11 +350,32 @@ public class Protocol {
 				if (c.getUserList().containsKey(nick)) {
 					User a = c.getUserList().get(nick);
 					User b = new User(a.identd, a.address, a.server, newNick, a.modes, a.realname);
+					b.setUpdateTime(System.currentTimeMillis());
 					c.getUserList().remove(nick);
 					c.getUserList().put(newNick, b);
 				}
 			}
 		}
+		
+		else if (line.split(" ")[1].equals("MODE")) {
+			String[] data = line.split(" ");
+			if (data.length < 5)
+				return;
+			String channel = data[2];
+			//String mode = raw[3];
+			List<String> updateUsers = new ArrayList<String>();
+			for (int x = 4; x < data.length; x++) {
+				if (!updateUsers.contains(data[x]) && engine.getChannelList().get(channel.toLowerCase()).getUserList().containsKey(data[x]) && engine.getChannelList().get(channel.toLowerCase()).getUserList().get(data[x]).canUpdate())
+					updateUsers.add(data[x]);
+			}
+			for (String user : updateUsers) {
+				engine.send("WHO +cn "+channel+" "+user);
+				engine.getChannelList().get(channel.toLowerCase()).getUserList().get(user).setUpdateTime(System.currentTimeMillis());
+			}
+			
+			
+		}
+
 
 		else if (Arrays.asList("JOIN", "PART", "QUIT", "KICK").contains(line.split(" ")[1])) {
 			String type = line.split(" ")[1];
@@ -351,6 +385,7 @@ public class Protocol {
 				channel = channel.substring(1);
 			if (type.equals("JOIN") && !nick.equals(engine.CURRENT_NICK)) { // Why are channels in joins prefixed with colons but parts aren't?
 				engine.send("WHO +cn "+channel+" "+nick);
+				engine.getChannelList().get(channel.toLowerCase()).getUserList().get(nick).setUpdateTime(System.currentTimeMillis());
 			}
 			else if (type.equals("QUIT")) {
 				for (Channel c : engine.getChannelList().values()) {

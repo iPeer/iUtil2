@@ -29,6 +29,7 @@ import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
+import com.simple.ipeer.iutil2.console.Console;
 import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
 import com.simple.ipeer.iutil2.irc.Server;
@@ -84,6 +85,7 @@ public class Main implements Runnable {
 
 	public boolean isConnected = false;
 	public List<OfflineMessage> offlineMessages = new ArrayList<OfflineMessage>();
+	private Console console;
 
 
 	public static void main(String[] args) {
@@ -174,6 +176,7 @@ public class Main implements Runnable {
 		announcers = new HashMap<String, AnnouncerHandler>();
 		announcers.put("YouTube", new YouTube(this));
 		announcers.put("Twitch", new Twitch(this));
+		console = new Console(this);
 
 		// Now everything should be okay and we can start the bot...
 
@@ -337,6 +340,8 @@ public class Main implements Runnable {
 	@Override
 	public void run() {
 
+		console.startIfNotRunning();
+		
 		setConnection(new Socket());
 
 		// Connecting to IRC

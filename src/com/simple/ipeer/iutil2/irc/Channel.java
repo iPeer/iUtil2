@@ -20,5 +20,6 @@ public class Channel {
 	public Map<String, User> getUserList() {
 		return users;
 	}
+
 	
 }
