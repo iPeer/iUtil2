@@ -362,7 +362,6 @@ public class Protocol {
 			if (data.length < 5)
 				return;
 			String channel = data[2];
-			//String mode = raw[3];
 			List<String> updateUsers = new ArrayList<String>();
 			for (int x = 4; x < data.length; x++) {
 				if (!updateUsers.contains(data[x]) && engine.getChannelList().get(channel.toLowerCase()).getUserList().containsKey(data[x]) && engine.getChannelList().get(channel.toLowerCase()).getUserList().get(data[x]).canUpdate())
@@ -370,7 +369,6 @@ public class Protocol {
 			}
 			for (String user : updateUsers) {
 				engine.send("WHO +cn "+channel+" "+user);
-				engine.getChannelList().get(channel.toLowerCase()).getUserList().get(user).setUpdateTime(System.currentTimeMillis());
 			}
 			
 			
@@ -385,7 +383,6 @@ public class Protocol {
 				channel = channel.substring(1);
 			if (type.equals("JOIN") && !nick.equals(engine.CURRENT_NICK)) { // Why are channels in joins prefixed with colons but parts aren't?
 				engine.send("WHO +cn "+channel+" "+nick);
-				engine.getChannelList().get(channel.toLowerCase()).getUserList().get(nick).setUpdateTime(System.currentTimeMillis());
 			}
 			else if (type.equals("QUIT")) {
 				for (Channel c : engine.getChannelList().values()) {
@@ -408,6 +405,7 @@ public class Protocol {
 				return;
 			}
 			User b = new User(a[4], a[5], a[6], a[7], a[8], realName);
+			b.setUpdateTime(System.currentTimeMillis());
 			engine.getChannelList().get(channel).getUserList().put(a[7], b);
 		}
 
