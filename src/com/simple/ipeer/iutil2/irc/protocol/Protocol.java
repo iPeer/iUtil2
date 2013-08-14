@@ -1,7 +1,6 @@
 package com.simple.ipeer.iutil2.irc.protocol;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,6 +46,62 @@ public class Protocol {
 		else if (line.startsWith("ERROR :")) {
 			handleDisconnect(engine, line.substring(7));
 		}
+		
+		/* CONNECTION RELATED STUFF */
+		
+		else if (line.indexOf("001") >= 0) // Server address
+			engine.CURRENT_SERVER = line.split(" ")[0].substring(1);
+
+		else if (line.indexOf("005") >= 0) {	// Network settings	
+			if (engine.NETWORK_SETTINGS == null)
+				engine.NETWORK_SETTINGS = new HashMap<String, String>();
+			String[] a = line.split(" ");
+			for (int x = 3; x < a.length; x++) {
+				if (a[x].contains("=")) {
+					String[] b = a[x].split("=");
+					engine.NETWORK_SETTINGS.put(b[0], b[1]);
+				}
+			}
+		}
+
+		else if (line.indexOf("004") >= 0) {
+			engine.send(engine.config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(engine.readPassword())), false /* We have to remember not to log this line because passwords. */);
+			engine.send("MODE "+engine.CURRENT_NICK+" "+engine.config.getProperty("connectModes"));
+		}
+
+		else if (line.indexOf("433") >= 0) {
+			String newNick = "";
+			try {
+				int n = Integer.valueOf(engine.CURRENT_NICK.substring(engine.CURRENT_NICK.length() - 1));
+				newNick = engine.CURRENT_NICK.substring(0, engine.CURRENT_NICK.length() - 1)+n++;
+			}
+			catch (NumberFormatException e) {
+				newNick = engine.CURRENT_NICK+"2";
+			}
+			engine.log("Nick is in use, trying "+newNick);
+			engine.changeNick(newNick);
+		}
+
+		else if (line.indexOf("251") >= 0) {
+			engine.CURRENT_NETWORK = engine.NETWORK_SETTINGS.get("NETWORK");
+			if (engine.CURRENT_NETWORK == null || engine.CURRENT_NETWORK.equals(""))
+				engine.CURRENT_NETWORK = "UNKNOWN";
+			engine.log("Connected to the "+engine.CURRENT_NETWORK+" network on server "+engine.CURRENT_SERVER);
+			String[] chans = engine.config.getProperty("autoJoin").split(",");
+			for (String a : chans)
+				engine.joinChannel(a);
+
+			// After joining channels we can start any announcers we may have.
+			for (AnnouncerHandler ah : engine.announcers.values())
+				ah.startAll();
+
+
+			// Send any messages that were queued while the bot was disconnected.
+			if (!engine.offlineMessages.isEmpty())
+				engine.sendQueuedMessages();
+		}
+		
+		/* END CONNECTION RELATED STUFF */
 
 		//Handle invites
 		else if (line.split(" ")[1].equals("INVITE")) {
@@ -56,6 +111,7 @@ public class Protocol {
 
 		// Handle actual chat messages
 		else if (Arrays.asList("PRIVMSG", "NOTICE").contains(line.split(" ")[1])) {
+			engine.getProfiler().start("Chat");
 			String nick = "";
 			String address = nick;
 			String channel = nick;
@@ -81,6 +137,7 @@ public class Protocol {
 			// CTCPs
 
 			if (message.startsWith("")) {
+				engine.getProfiler().start("CTCP");
 				String ctcpType = message.split(" ")[0].substring(1).replaceAll("", "");
 				if (ctcpType.equals("PING"))
 					engine.send("NOTICE "+nick+" :PING "+message.substring(6));
@@ -88,11 +145,13 @@ public class Protocol {
 					engine.send("NOTICE "+nick+" :TIME "+new SimpleDateFormat("dd/MM/yy HH:mm:ss Z").format(System.currentTimeMillis()));
 				if (ctcpType.equals("VERSION"))
 					engine.send("NOTICE "+nick+" :VERSION iUtil 2 version "+engine.BOT_VERSION+" Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+" ("+System.getProperty("os.name")+")");
+				engine.getProfiler().end();
 			}
 
 			// YouTube Links
 
 			if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
+				engine.getProfiler().start("YouTubeLinks");
 				int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
 				int curVid = 1;
 				String[] vids = message.split("(.be/|v=)");
@@ -150,15 +209,17 @@ public class Protocol {
 						engine.logError(e);
 					}
 				}
+				engine.getProfiler().end();
 			}
 
 
 			// Commands
 
 			if ((engine == null ? "@#.!" : engine.config.getProperty("commandCharacters")).contains(message.substring(0, 1))) {
+				engine.getProfiler().start("Commands");
 				String sendPrefix = ((engine == null ? "#@" : engine.config.getProperty("publicCommandCharacters")).contains(message.substring(0, 1)) ? "PRIVMSG "+channel : "NOTICE "+nick);
 				String commandPrefix = message.substring(0, 1);
-				boolean isAdmin = (engine == null ? true : engine.getChannelList().get("#peer.dev").getUserList().get(nick).isOp());
+				boolean isAdmin = engine == null || engine.getChannelList().get(engine.config.getProperty("debugChannel").toLowerCase()).getUserList().get(nick).isOp();
 				String commandName = message.split(" ")[0].substring(1).toLowerCase();
 
 				if (commandName.equals("quit") && isAdmin) {
@@ -169,7 +230,7 @@ public class Protocol {
 				else if (commandName.equals("throwexception") && isAdmin) {
 					engine.logError(new Exception("Forced debug exception"), "DEBUG");
 				}
-				
+
 				else if (commandName.matches("force(y(ou)?t(ube)?)?update") && isAdmin) {
 					long start = System.currentTimeMillis();
 					engine.send(sendPrefix+" :Updating all YouTube threads...");
@@ -182,7 +243,17 @@ public class Protocol {
 					engine.getAnnouncers().get("Twitch").updateAll();
 					engine.send(sendPrefix+" :Finished updating all Twitch threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
 				}
-				
+
+				else if (commandName.equals("profiler")) {
+					if (message.split(" ").length > 1) {
+						String parameter = message.split(" ")[1];
+						if (engine.getProfiler().profileData().containsKey(parameter))
+							engine.send(sendPrefix+" :Last iteration of '%B%"+parameter+"%B%' took "+engine.getProfiler().profileData().get(parameter) / 1000000.0D+ "ms.");
+						else 
+							engine.send(sendPrefix+" :'%B%"+parameter+"%B%' has been iterated upon yet.");
+					}
+				}
+
 				else if (commandName.equals("reloadconfig") && isAdmin) {
 					engine.send(sendPrefix+" :Attempting to reload config...");
 					Properties oldConfig = engine.config; // In case it fails.
@@ -220,7 +291,7 @@ public class Protocol {
 
 				}
 
-				else if (commandName.matches("(info(mation)?|status)")) {
+				else if (commandName.matches("(info(mation)?|status)") && isAdmin) {
 					long totalMemory = Runtime.getRuntime().totalMemory();
 					long freeMemory = Runtime.getRuntime().freeMemory();
 					long usedMemory = totalMemory - freeMemory;
@@ -242,6 +313,7 @@ public class Protocol {
 					out.add("Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+", C: "+System.getProperty("java.class.version")+" VM: "+System.getProperty("java.vm.version")+" / "+System.getProperty("java.vm.specification.version"));
 					out.add("OS: "+System.getProperty("os.name")+" / "+System.getProperty("os.version"));
 					out.add("Connection: "+engine.getConnection().toString());
+					out.add("Profiling: "+engine.config.getProperty("profilingEnabled"));
 					engine.send(sendPrefix, out, true, false);				
 				}
 
@@ -267,10 +339,13 @@ public class Protocol {
 						String entry = d[1];
 						if (engine.config.containsKey(entry)) {
 							engine.disableFormatProcessing();
-							if (d.length == 3) {
+							if (d.length >= 3) {
 								String oldValue = engine.config.getProperty(entry);
-								engine.config.put(entry, d[2]);
-								engine.send(sendPrefix+" :Config entry "+entry+" has been changed from "+oldValue+" to "+d[2]+".");
+								String newValue = "";
+								for (int x = 2; x < d.length; x++)
+									newValue = newValue+(newValue.length() > 0 ? " " : "")+d[x];
+								engine.config.put(entry, newValue);
+								engine.send(sendPrefix+" :Config entry "+entry+" has been changed from "+oldValue+" to "+newValue+".");
 								engine.saveConfig();
 							}
 							else {
@@ -338,12 +413,13 @@ public class Protocol {
 					}
 				}
 
-
+				engine.getProfiler().end();
 			}
 
 		}
 
 		else if (line.split(" ")[1].equals("NICK")) {
+			engine.getProfiler().start("Nicks");
 			String nick = line.split("!")[0].substring(1);
 			String newNick = line.split(":")[2];
 			for (Channel c : engine.getChannelList().values()) {
@@ -355,9 +431,11 @@ public class Protocol {
 					c.getUserList().put(newNick, b);
 				}
 			}
+			engine.getProfiler().end();
 		}
-		
+
 		else if (line.split(" ")[1].equals("MODE")) {
+			engine.getProfiler().start("Modes");
 			String[] data = line.split(" ");
 			if (data.length < 5)
 				return;
@@ -370,12 +448,14 @@ public class Protocol {
 			for (String user : updateUsers) {
 				engine.send("WHO +cn "+channel+" "+user);
 			}
-			
-			
+
+			engine.getProfiler().end();
+
 		}
 
 
 		else if (Arrays.asList("JOIN", "PART", "QUIT", "KICK").contains(line.split(" ")[1])) {
+			engine.getProfiler().start("Events");
 			String type = line.split(" ")[1];
 			String nick = line.split("!")[0].substring(1);
 			String channel = line.split(" ")[2].toLowerCase();
@@ -394,9 +474,11 @@ public class Protocol {
 			else {
 				engine.getChannelList().get(channel).getUserList().remove(nick);
 			}
+			engine.getProfiler().end();
 		}
 
 		else if (line.split(" ")[1].equals("352")) {
+			engine.getProfiler().start("WHO");
 			String[] a = line.split(" ");
 			String channel = a[3].toLowerCase();
 			String realName = line.split(":")[2];
@@ -407,6 +489,7 @@ public class Protocol {
 			User b = new User(a[4], a[5], a[6], a[7], a[8], realName);
 			b.setUpdateTime(System.currentTimeMillis());
 			engine.getChannelList().get(channel).getUserList().put(a[7], b);
+			engine.getProfiler().end();
 		}
 
 		else if (line.split(" ")[1].equals("474")) {
@@ -415,6 +498,8 @@ public class Protocol {
 			if (engine.getChannelList().containsKey(channel))
 				engine.getChannelList().remove(channel);
 		}
+
+		engine.getProfiler().end();
 
 	}
 

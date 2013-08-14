@@ -7,11 +7,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
-import java.util.List;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -92,7 +90,6 @@ public class YouTubeChannel implements Announcer, Runnable {
 	@Override
 	public void update() {
 		try {
-
 			LinkedList<Upload> announce = new LinkedList<Upload>();
 
 			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -136,6 +133,7 @@ public class YouTubeChannel implements Announcer, Runnable {
 			engine.log("Couldn't update YouTube uploads for user "+this.channelName);
 			engine.logError(e, "YouTube");
 		}
+		
 	}
 
 	public void saveCache() throws FileNotFoundException, IOException {

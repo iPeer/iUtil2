@@ -50,7 +50,7 @@ public class Console implements Runnable {
 			while((line = console.readLine()) != null && !thread.isInterrupted()) {
 				String command = line.split(" ")[0];
 				
-				if (command.matches("forcey(ou)?t(ube)?update")) {
+				if (command.matches("force(y(ou)?t(ube)?)?update")) {
 					engine.getAnnouncers().get("YouTube").updateAll();
 				}
 				else if (command.equals("forcetwitchupdate")) {

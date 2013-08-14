@@ -37,23 +37,23 @@ public class TwitchChannel implements Announcer, Runnable {
 	}
 
 
-//	public static void main(String[] args) {
-//		TwitchChannel a = new TwitchChannel("Inker19", null, null);
-//		a.removeCache();
-//		a.update();
-//	}
+	//	public static void main(String[] args) {
+	//		TwitchChannel a = new TwitchChannel("Inker19", null, null);
+	//		a.removeCache();
+	//		a.update();
+	//	}
 
 	@Override
 	public void run() {
 		while (this.isRunning && !this.thread.isInterrupted()) {
 			if (engine != null)
-			if (twitch != null && !twitch.waitingToSync.isEmpty()) {
-				Iterator<TwitchChannel> it = twitch.waitingToSync.iterator();
-				while (it.hasNext()) {
-					(it.next()).startIfNotRunning();
-					it.remove();
+				if (twitch != null && !twitch.waitingToSync.isEmpty()) {
+					Iterator<TwitchChannel> it = twitch.waitingToSync.iterator();
+					while (it.hasNext()) {
+						(it.next()).startIfNotRunning();
+						it.remove();
+					}
 				}
-			}
 			update();
 			this.lastUpdate = System.currentTimeMillis();
 			try {
@@ -89,11 +89,17 @@ public class TwitchChannel implements Announcer, Runnable {
 				streamID = ((Element)data).getElementsByTagName("id").item(0).getFirstChild().getNodeValue();
 				//data.item(11).getFirstChild().getNodeValue();
 				// The Stream title changes place (doesn't that defeat the point of an API?), so we have to do it this way...
-				streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue();
+				try {
+					streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue();
+				}
+				catch (NullPointerException e) { }
 				// Seems the quality can sometimes be contaminated by the title of the stream.
 				streamQuality = ((Element)data).getElementsByTagName("video_height").item(0).getFirstChild().getNodeValue();
 				//data.item(17).getFirstChild().getNodeValue();
-				gameName = ((Element)data).getElementsByTagName("meta_game").item(0).getFirstChild().getNodeValue();
+				try {
+					gameName = ((Element)data).getElementsByTagName("meta_game").item(0).getFirstChild().getNodeValue();
+				}
+				catch (NullPointerException e) { }
 				//data.item(27).getFirstChild().getNodeValue();
 				streamData.add(0, streamID);
 				streamData.add(1, streamDesc);
@@ -113,7 +119,7 @@ public class TwitchChannel implements Announcer, Runnable {
 
 	private void announce(List<String> data) {
 		try {
-			String gameName = "", streamQuality = "", streamDesc = "", streamID = "", outMessage = "";
+			String gameName = "", streamQuality = "", streamDesc = "", outMessage = "";
 			Properties a = new Properties();
 			if (data.isEmpty()) {
 				if (this.cacheFile.exists()) {
@@ -128,7 +134,6 @@ public class TwitchChannel implements Announcer, Runnable {
 					gameName = a.getProperty("lastGame");
 					streamDesc = a.getProperty("lastStatus");
 					streamQuality = a.getProperty("lastQuality", "");
-					streamID = a.getProperty("lastID", "");
 				}
 				/*
 				 * 0 = ID
@@ -151,7 +156,7 @@ public class TwitchChannel implements Announcer, Runnable {
 					a.put("lastQuality", data.get(2));
 					a.store(new FileOutputStream(this.cacheFile), "Twitch.TV Cache for "+this.channelName);
 				}
-				
+
 			}
 			if (!outMessage.equals("")) {
 				outMessage = outMessage
@@ -185,7 +190,7 @@ public class TwitchChannel implements Announcer, Runnable {
 		if (this.thread != null)
 			this.thread.interrupt();
 	}
-	
+
 	public void stopIfRunning() {
 		if (this.isRunning)
 			stop();
@@ -206,7 +211,7 @@ public class TwitchChannel implements Announcer, Runnable {
 		}
 	}
 
-	
+
 	public void removeCache() {
 		System.err.println(this.cacheFile.exists()+", "+this.cacheFile.getAbsolutePath());
 		if (this.cacheFile.exists()) {

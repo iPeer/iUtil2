@@ -34,12 +34,13 @@ import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
 import com.simple.ipeer.iutil2.irc.Server;
 import com.simple.ipeer.iutil2.irc.protocol.Protocol;
+import com.simple.ipeer.iutil2.profiler.Profiler;
 import com.simple.ipeer.iutil2.twitch.Twitch;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 
 public class Main implements Runnable {
 
-	public final String BOT_VERSION = "0.1";
+	public final String BOT_VERSION = "0.178";
 
 	private static final File DEFAULT_CONFIG_DIR = new File("./config");
 	private static final Server DEFAULT_SERVER = new Server("irc.swiftirc.net", false, 6667);
@@ -65,6 +66,10 @@ public class Main implements Runnable {
 	public FileWriter errorWriter;
 	public String CURRENT_NICK;
 	public Boolean REQUESTED_QUIT = false;
+	public String CURRENT_SERVER;
+	public String CURRENT_NETWORK;
+	public HashMap<String, String> NETWORK_SETTINGS;
+	public HashMap<String, AnnouncerHandler> announcers;
 
 	private Thread engineThread;
 	//private Main engine;
@@ -73,15 +78,12 @@ public class Main implements Runnable {
 	private Socket connection;
 	private BufferedReader in;
 	private BufferedWriter out;
-	private String CURRENT_SERVER;
-	private String CURRENT_NETWORK;
-	private HashMap<String, String> NETWORK_SETTINGS;
 	private HashMap<String, Channel> CHANNEL_LIST;
 	private boolean SERVER_REGISTERED = false;
 	private boolean textFormatting = true;
 	private int connectionRetries = 0;
-
-	private HashMap<String, AnnouncerHandler> announcers;
+	private static Main engine;
+	private Profiler profiler;
 
 	public boolean isConnected = false;
 	public List<OfflineMessage> offlineMessages = new ArrayList<OfflineMessage>();
@@ -101,6 +103,8 @@ public class Main implements Runnable {
 	}
 
 	public Main(HashMap<String, String> args) {
+		
+		engine = this;
 
 		// Handle config files and stuff, creating directories should they not exist.
 		//		if (!DEFAULT_CONFIG_DIR.exists())
@@ -169,6 +173,8 @@ public class Main implements Runnable {
 		defaultConfig.put("noAMSG", "#Peer.Dev");
 		defaultConfig.put("maxConnectionRetries", "5");
 		defaultConfig.put("reconnectDelay", "5000");
+		defaultConfig.put("debugChannel", "#peer.dev");
+		defaultConfig.put("profilingEnabled", "true");
 		createConfigDefaults(defaultConfig);
 
 		// Announcers and other threads that should run while the bot is
@@ -177,11 +183,12 @@ public class Main implements Runnable {
 		announcers.put("YouTube", new YouTube(this));
 		announcers.put("Twitch", new Twitch(this));
 		console = new Console(this);
+		profiler = new Profiler();
 
 		// Now everything should be okay and we can start the bot...
 
 		this.engineThread = new Thread(this, "iUtil 2 Main Thread");
-		//this.engine = this;
+		
 		// Oh god.
 		start();
 
@@ -328,6 +335,7 @@ public class Main implements Runnable {
 				additions++;
 			}
 		}
+		c.clear(); // Helps save a wee bit of memory.
 		if (additions > 0)
 			saveConfig();
 	}
@@ -382,80 +390,14 @@ public class Main implements Runnable {
 			log("Registered nick with server, waiting for response...");
 			this.isConnected = true;
 
-			// On response from the server, go into a loop until we get RAW 251.
-			// If the server never sends this RAW, the bot will never exit this loop (possibly dangerous?)
-
 			String line = "";
 			try {
 				Protocol protocol = new Protocol();
-				// Connection data is parsed here, "regular" IRC traffic is parsed by Protocol.java
+
 				while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
-					log("<- "+line, "IRC");
-					if (line.startsWith("PING ")) // in case the server pings while we're connecting
-						send("PONG "+line.substring(5), true, true);
-					// Handle being disconnected by the server during connect
-					else if (line.startsWith("ERROR :")) {
-						protocol.handleDisconnect(this, line.substring(7));
-					}
-					else if (line.indexOf("001") >= 0) // Server address
-						this.CURRENT_SERVER = line.split(" ")[0].substring(1);
-
-					else if (line.indexOf("005") >= 0) {	// Network settings	
-						if (NETWORK_SETTINGS == null)
-							NETWORK_SETTINGS = new HashMap<String, String>();
-						String[] a = line.split(" ");
-						for (int x = 3; x < a.length; x++) {
-							if (a[x].contains("=")) {
-								String[] b = a[x].split("=");
-								NETWORK_SETTINGS.put(b[0], b[1]);
-							}
-						}
-					}
-
-					else if (line.indexOf("004") >= 0) {
-						send(config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(readPassword())), false /* We have to remember not to log this line because passwords. */);
-						send("MODE "+CURRENT_NICK+" "+config.getProperty("connectModes"));
-					}
-
-					else if (line.indexOf("433") >= 0) {
-						String newNick = "";
-						try {
-							int n = Integer.valueOf(CURRENT_NICK.substring(CURRENT_NICK.length() - 1));
-							newNick = CURRENT_NICK.substring(0, CURRENT_NICK.length() - 1)+n++;
-						}
-						catch (NumberFormatException e) {
-							newNick = CURRENT_NICK+"2";
-						}
-						log("Nick is in use, trying "+newNick);
-						changeNick(newNick);
-					}
-
-					else if (line.indexOf("251") >= 0) {
-						CURRENT_NETWORK = NETWORK_SETTINGS.get("NETWORK");
-						if (CURRENT_NETWORK == null || CURRENT_NETWORK.equals(""))
-							CURRENT_NETWORK = "UNKNOWN";
-						log("Connected to the "+CURRENT_NETWORK+" network on server "+CURRENT_SERVER);
-						break;
-					}
-
-				}
-
-				String[] chans = config.getProperty("autoJoin").split(",");
-				for (String a : chans)
-					joinChannel(a);
-
-				// After joining channels we can start any announcers we may have.
-				for (AnnouncerHandler ah : announcers.values())
-					ah.startAll();
-
-				log("Protocol class is now handling incoming traffic.");
-				log(protocol.toString());
-
-				// Send any messages that were queued while the bot was diconnected.
-				if (!this.offlineMessages.isEmpty())
-					sendQueuedMessages();
-				while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
+					getProfiler().startSection("Incoming");
 					protocol.parse(line, this);
+					try { getProfiler().end(); } catch (Exception e) { }
 				}
 
 			}
@@ -469,8 +411,7 @@ public class Main implements Runnable {
 
 	}
 
-
-	private void sendQueuedMessages() {
+	public void sendQueuedMessages() {
 		Iterator<OfflineMessage> it = this.offlineMessages.iterator();
 		while (it.hasNext()) {
 			OfflineMessage m = it.next();
@@ -514,10 +455,12 @@ public class Main implements Runnable {
 	}
 
 	public void send(String data, boolean log, boolean sendIfNotConnected) {
+		engine.getProfiler().start("Outgoing");
 		try {
 			if (!this.getConnection().isConnected() && !sendIfNotConnected) {
 				log("Tried to send message while offline, queuing for sending when (if) we reconnect.");
 				this.offlineMessages.add(new OfflineMessage(data, log, sendIfNotConnected));
+				engine.getProfiler().end();
 				return;
 			}
 
@@ -543,6 +486,7 @@ public class Main implements Runnable {
 			log("Couldn't send data to socket!");
 			logError(e);
 		}
+		engine.getProfiler().end();
 	}
 
 	public HashMap<String, Channel> getChannelList() {
@@ -621,6 +565,22 @@ public class Main implements Runnable {
 
 	public void setConnection(Socket connection) {
 		this.connection = connection;
+	}
+	
+	public static Main getEngine() {
+		return engine;
+	}
+	
+	public static Main getMain() {
+		return getEngine();
+	}
+
+	public boolean profilingEnabled() {
+		return engine == null || config.getProperty("profilingEnabled").equals("true");
+	}
+
+	public Profiler getProfiler() {
+		return this.profiler;
 	}
 
 
