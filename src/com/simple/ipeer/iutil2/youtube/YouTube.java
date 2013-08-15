@@ -212,7 +212,10 @@ public class YouTube implements AnnouncerHandler {
 			likes = NumberFormat.getInstance().format(Integer.valueOf(li.getNamedItem("numLikes").toString().replaceAll("numLikes=|\"", "")));
 		} catch (NullPointerException e1) { }
 		String comments = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("gd:feedLink").item(0).getAttributes().getNamedItem("countHint").toString().replaceAll("countHint=|\"", "")));
-		String views = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("yt:statistics").item(0).getAttributes().getNamedItem("viewCount").toString().replaceAll("viewCount=|\"", "")));
+		String views = "0";
+		try {
+			views = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("yt:statistics").item(0).getAttributes().getNamedItem("viewCount").toString().replaceAll("viewCount=|\"", "")));
+		} catch (NullPointerException e1) { }
 		String duration = e.getElementsByTagName("yt:duration").item(0).getAttributes().getNamedItem("seconds").toString().replaceAll("seconds=|\"", "");
 		String author = e.getElementsByTagName("name").item(0).getFirstChild().getNodeValue();
 

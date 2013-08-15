@@ -90,7 +90,7 @@ public class TwitchChannel implements Announcer, Runnable {
 				//data.item(11).getFirstChild().getNodeValue();
 				// The Stream title changes place (doesn't that defeat the point of an API?), so we have to do it this way...
 				try {
-					streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue();
+					streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue().trim();
 				}
 				catch (NullPointerException e) { }
 				// Seems the quality can sometimes be contaminated by the title of the stream.
