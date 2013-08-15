@@ -40,7 +40,7 @@ import com.simple.ipeer.iutil2.youtube.YouTube;
 
 public class Main implements Runnable {
 
-	public final String BOT_VERSION = "0.178";
+	public final String BOT_VERSION = "0.181";
 
 	private static final File DEFAULT_CONFIG_DIR = new File("./config");
 	private static final Server DEFAULT_SERVER = new Server("irc.swiftirc.net", false, 6667);
@@ -84,8 +84,9 @@ public class Main implements Runnable {
 	private int connectionRetries = 0;
 	private static Main engine;
 	private Profiler profiler;
+	private long bytesSent = 0L;
+	private long bytesReceived = 0L;
 
-	public boolean isConnected = false;
 	public List<OfflineMessage> offlineMessages = new ArrayList<OfflineMessage>();
 	private Console console;
 
@@ -381,14 +382,13 @@ public class Main implements Runnable {
 			logError(e);
 			System.exit(1);
 		}*/
-		if (getConnection().isConnected()) {
+		if (isConnected()) {
 			this.connectionRetries = 0;
 			log("Connected to server "+config.getProperty("server")+":"+config.getProperty("port")+".");
 			log(getConnection().toString());
 
 			changeNick(config.getProperty("nick", DEFAULT_NICK));
 			log("Registered nick with server, waiting for response...");
-			this.isConnected = true;
 
 			String line = "";
 			try {
@@ -396,6 +396,7 @@ public class Main implements Runnable {
 
 				while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
 					getProfiler().startSection("Incoming");
+					addReceivedBytes(line.getBytes().length);
 					protocol.parse(line, this);
 					try { getProfiler().end(); } catch (Exception e) { }
 				}
@@ -457,7 +458,7 @@ public class Main implements Runnable {
 	public void send(String data, boolean log, boolean sendIfNotConnected) {
 		engine.getProfiler().start("Outgoing");
 		try {
-			if (!this.getConnection().isConnected() && !sendIfNotConnected) {
+			if (!isConnected() && !sendIfNotConnected) {
 				log("Tried to send message while offline, queuing for sending when (if) we reconnect.");
 				this.offlineMessages.add(new OfflineMessage(data, log, sendIfNotConnected));
 				engine.getProfiler().end();
@@ -477,6 +478,7 @@ public class Main implements Runnable {
 				.replaceAll("%[HR]%", String.valueOf(Main.HIGHLIGHT))
 				.replaceAll("%E%", String.valueOf(Main.ENDALL))
 				.replaceAll("%DASH%", String.valueOf(Main.DASH));
+			addSentBytes(data.getBytes().length);
 			out.write(data);
 			out.flush();
 			if (log)
@@ -501,7 +503,6 @@ public class Main implements Runnable {
 		if (!reconnect)
 			REQUESTED_QUIT = true;
 		send("QUIT :"+quitMessage);
-		this.isConnected = false;
 	}
 
 	public char[] readPassword() {
@@ -581,6 +582,31 @@ public class Main implements Runnable {
 
 	public Profiler getProfiler() {
 		return this.profiler;
+	}
+	
+	public boolean isConnected() {
+		return getConnection().isConnected();
+	}
+	
+	public void addSentBytes(long bytes) {
+		this.bytesSent += bytes;
+	}
+	
+	public void addReceivedBytes(long bytes) {
+		this.bytesReceived += bytes;
+	}
+	
+	public long getBytesSent() {
+		return this.bytesSent;
+	}
+	
+	public long getBytesReceived() {
+		return this.bytesReceived;
+	}
+	
+	public long[] getBandwidth() {
+		long[] a = {this.bytesSent, this.bytesReceived};
+		return a;
 	}
 
 

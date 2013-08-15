@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.regex.Matcher;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -193,7 +194,7 @@ public class YouTubeChannel implements Announcer, Runnable {
 			String time = youtube.formatTime(len);
 
 			String out = (engine == null ? "%C2%%USER% %C1%uploaded a video: %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1] %DASH% %C2%%VIDEOLINK%" : engine.config.getProperty("youtubeAnnounceFormat"))
-					.replaceAll("%(VIDEO)?TITLE%", title)
+					.replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(title)) // Fix for "Illegal group reference" when title contains regex characters such as $.
 					.replaceAll("(%(VIDEO)?(LENGTH|DURATION)%)", time)
 					.replaceAll("%USER%", this.realChannelName)
 					.replaceAll("%VIDEOLINK%", engine.config.getProperty("youtubeURLPrefix")+vid);

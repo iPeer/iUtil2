@@ -12,6 +12,7 @@ import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.User;
+import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 
 public class Protocol {
@@ -19,7 +20,6 @@ public class Protocol {
 	public Protocol () {	}
 
 	public void handleDisconnect(Main engine, String message)  {
-		engine.isConnected = false;
 		engine.log("Disconnected! "+message);
 		if (engine.REQUESTED_QUIT)
 			System.exit(0);
@@ -27,10 +27,10 @@ public class Protocol {
 			engine.reconnect();
 	}
 
-	public static void main(String[] args) {
+/*	public static void main(String[] args) {
 		Protocol p = new Protocol();
 		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :http://youtube.com/watch?v=&v=&v=&v=", null);
-	}
+	}*/
 
 	public void parse(String line, Main engine) {
 		// We log the whole line for debug purposes
@@ -313,7 +313,7 @@ public class Protocol {
 					out.add("Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+", C: "+System.getProperty("java.class.version")+" VM: "+System.getProperty("java.vm.version")+" / "+System.getProperty("java.vm.specification.version"));
 					out.add("OS: "+System.getProperty("os.name")+" / "+System.getProperty("os.version"));
 					out.add("Connection: "+engine.getConnection().toString());
-					out.add("Profiling: "+engine.config.getProperty("profilingEnabled"));
+					out.add("IRC Traffic (estimate): Sent: "+Filesize.calculate(engine.getBytesSent())+", Received: "+Filesize.calculate(engine.getBytesReceived()));
 					engine.send(sendPrefix, out, true, false);				
 				}
 
