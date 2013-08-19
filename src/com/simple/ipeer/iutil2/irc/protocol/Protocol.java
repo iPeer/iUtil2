@@ -27,10 +27,10 @@ public class Protocol {
 			engine.reconnect();
 	}
 
-/*	public static void main(String[] args) {
+	public static void main(String[] args) {
 		Protocol p = new Protocol();
-		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :http://youtube.com/watch?v=&v=&v=&v=", null);
-	}*/
+		p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev ::D", null);
+	}
 
 	public void parse(String line, Main engine) {
 		// We log the whole line for debug purposes
@@ -46,9 +46,9 @@ public class Protocol {
 		else if (line.startsWith("ERROR :")) {
 			handleDisconnect(engine, line.substring(7));
 		}
-		
+
 		/* CONNECTION RELATED STUFF */
-		
+
 		else if (line.indexOf("001") >= 0) // Server address
 			engine.CURRENT_SERVER = line.split(" ")[0].substring(1);
 
@@ -100,7 +100,7 @@ public class Protocol {
 			if (!engine.offlineMessages.isEmpty())
 				engine.sendQueuedMessages();
 		}
-		
+
 		/* END CONNECTION RELATED STUFF */
 
 		//Handle invites
@@ -111,7 +111,8 @@ public class Protocol {
 
 		// Handle actual chat messages
 		else if (Arrays.asList("PRIVMSG", "NOTICE").contains(line.split(" ")[1])) {
-			engine.getProfiler().start("Chat");
+			if (engine != null)
+				engine.getProfiler().start("Chat");
 			String nick = "";
 			String address = nick;
 			String channel = nick;
@@ -129,10 +130,15 @@ public class Protocol {
 				channel = nick;
 			String[] messageData = line.split(":");
 			String message = "";
-			for (int x = 2; x < messageData.length; x++) {
-				message = message+":"+messageData[x];
+			if (messageData.length > 2) {
+				for (int x = 2; x < messageData.length; x++) {
+					message = message+":"+messageData[x];
+				}
+				message = message.substring(1);
 			}
-			message = message.substring(1);	
+			else {
+				message = ":";
+			}
 
 			// CTCPs
 
@@ -499,7 +505,8 @@ public class Protocol {
 				engine.getChannelList().remove(channel);
 		}
 
-		engine.getProfiler().end();
+		if (engine != null)
+			engine.getProfiler().end();
 
 	}
 
