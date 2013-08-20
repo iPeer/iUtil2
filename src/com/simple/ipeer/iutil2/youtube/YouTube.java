@@ -4,10 +4,15 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 
@@ -18,6 +23,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
@@ -29,6 +35,7 @@ public class YouTube implements AnnouncerHandler {
 	protected Main engine;
 	public List<YouTubeChannel> waitingToSync = new ArrayList<YouTubeChannel>();
 	private boolean hasStarted = false;
+	private static YouTube youtubeInstance;
 
 	public YouTube(Main engine) {
 		if (engine != null)
@@ -67,6 +74,7 @@ public class YouTube implements AnnouncerHandler {
 			}
 			loadChannels();
 			engine.log("YouTube announcer started up succesfully.", "YouTube");
+			youtubeInstance = this;
 		}
 	}
 
@@ -232,15 +240,6 @@ public class YouTube implements AnnouncerHandler {
 		return data;
 	}
 
-	//	public static void main(String[] args) throws SAXException, IOException, ParserConfigurationException {
-	//
-	//		YouTube y = new YouTube(null);
-	//		HashMap<String, String> a = y.getVideoInfo("CGyEd0aKWZE");
-	//		for (String b : a.keySet())
-	//			System.err.println(b+": "+a.get(b));
-	//
-	//	}
-
 	public String formatTime(String seconds) {
 		return formatTime(Integer.valueOf(seconds));
 	}
@@ -252,6 +251,91 @@ public class YouTube implements AnnouncerHandler {
 		if (hours > 0)
 			minutes -= hours*60;
 		return (hours > 0 ? String.format("%02d", hours)+":" : "")+String.format("%02d", minutes)+":"+String.format("%02d", seconds);
+	}
+	
+	public LinkedList<YouTubeSearchResult> getSearchResults(String query) throws SAXException, IOException, ParserConfigurationException {
+		return getSearchResults(query, 0);
+	}
+
+	public LinkedList<YouTubeSearchResult> getSearchResults(String query, int retries) throws SAXException, IOException, ParserConfigurationException {
+		
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		DocumentBuilder builder = factory.newDocumentBuilder();
+		Document doc = builder.newDocument();
+		HttpURLConnection conn = (HttpURLConnection)(new URL("https://gdata.youtube.com/feeds/api/videos?q="+URLEncoder.encode(query, "UTF-8" /* ISO-8859-1 */)+"&v=2").openConnection());
+		conn.setReadTimeout(2500);
+		try {
+			doc = builder.parse(conn.getInputStream());
+		}
+		catch (SocketTimeoutException e) {
+			if (retries < 5) { // Infinite loop prevention
+				System.err.println("Retry #"+(retries + 1));
+				return getSearchResults(query, retries++);
+			}
+			else
+				throw new RuntimeException("The server did not respond within 5 tries.");
+		}
+		Element element = doc.getDocumentElement();
+		element.normalize();
+		NodeList entries;
+		if ((entries = element.getElementsByTagName("entry")).getLength() < 1)
+			throw new RuntimeException("No videos found for '"+query+"'");
+		LinkedList<YouTubeSearchResult> data = new LinkedList<YouTubeSearchResult>();
+		for (int x = 0; x < (engine == null ? 1 : Integer.valueOf(engine.config.getProperty("youtubeMaxSearchResults"))) && x < entries.getLength(); x++) {
+			NodeList d = entries.item(x).getChildNodes();
+			int length, views, likes, dislikes, comments;
+			length = likes = dislikes = length = comments = views = 0;
+			String title, author, description, videoID;
+			title = author = description = videoID = "";
+
+			// Don't need to check these for null as they should never be empty
+
+			author = ((Element)d).getElementsByTagName("author").item(0).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();
+			title = ((Element)d).getElementsByTagName("title").item(0).getChildNodes().item(0).getNodeValue();
+			videoID = ((Element)d).getElementsByTagName("yt:videoid").item(0).getChildNodes().item(0).getNodeValue();
+
+			length = Integer.valueOf(((Element)d).getElementsByTagName("media:content").item(0).getAttributes().getNamedItem("duration").getNodeValue());
+			comments = Integer.valueOf(((Element)d).getElementsByTagName("gd:feedLink").item(0).getAttributes().getNamedItem("countHint").getNodeValue());
+
+			// Needs to be checked for null values
+
+			try {
+				views = Integer.valueOf(((Element)d).getElementsByTagName("yt:statistics").item(0).getAttributes().item(1).getNodeValue());
+			} catch (NullPointerException e1) { }
+
+			try {
+				NamedNodeMap ratings = ((Element)d).getElementsByTagName("yt:rating").item(0).getAttributes();
+				dislikes = Integer.valueOf(ratings.item(0).getNodeValue());
+				likes = Integer.valueOf(ratings.item(1).getNodeValue());
+			} catch (NullPointerException e1) { }
+
+			try {
+				description = ((Element)d).getElementsByTagName("media:description").item(0).getFirstChild().getNodeValue().replaceAll("\\[rn]+", " ");
+			} catch (NullPointerException e1) { }
+
+			data.add(new YouTubeSearchResult(videoID, author, title, description, formatTime(length), length, views, likes, dislikes, comments));
+
+
+		}
+		return data;
+	}
+
+	public static YouTube getInstance() {
+		return youtubeInstance;
+	}
+
+	public static void main(String[] args) {
+
+		try {
+			YouTube y = new YouTube(null);
+			LinkedList<YouTubeSearchResult> a = y.getSearchResults("ellie goulding burn");
+			for (YouTubeSearchResult b : a) {
+				System.err.println(b.toString());
+			}
+		} catch (Throwable e) {
+			e.printStackTrace();
+		}
+
 	}
 
 }
