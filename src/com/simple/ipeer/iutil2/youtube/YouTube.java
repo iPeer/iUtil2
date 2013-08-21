@@ -15,6 +15,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -69,7 +70,9 @@ public class YouTube implements AnnouncerHandler {
 			settings.put("youtubeSearchDescriptions", "false"); // Should descriptions be shown when a user searches for videos?
 			settings.put("youtubeMaxSearchResults",  "1");
 			settings.put("youtubeSearchFormat", "%C1%[%C2%%AUTHOR%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] %DASH% %C2%%VIDEOURL%");
-
+			settings.put("youtubeCountryCode", "GB");
+			
+			
 			engine.createConfigDefaults(settings);
 
 			File youtubeDir = new File(engine.config.getProperty("youtubeDir"));
@@ -268,7 +271,7 @@ public class YouTube implements AnnouncerHandler {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 		DocumentBuilder builder = factory.newDocumentBuilder();
 		Document doc = builder.newDocument();
-		HttpURLConnection conn = (HttpURLConnection)(new URL("https://gdata.youtube.com/feeds/api/videos?q="+URLEncoder.encode(query, "UTF-8" /* ISO-8859-1 */)+"&v=2").openConnection());
+		HttpURLConnection conn = (HttpURLConnection)(new URL("https://gdata.youtube.com/feeds/api/videos?q="+URLEncoder.encode(query, "UTF-8" /* ISO-8859-1 */)+"&v=2&safeSearch=none&max-results="+(engine == null ? "1" : Integer.valueOf(engine.config.getProperty("youtubeMaxSearchResults")))+"&restriction="+(engine == null ? "GB" : engine.config.getProperty("youtubeCountryCode"))).openConnection());
 		conn.setReadTimeout(2500);
 		try {
 			doc = builder.parse(conn.getInputStream());
@@ -287,7 +290,7 @@ public class YouTube implements AnnouncerHandler {
 		if ((entries = element.getElementsByTagName("entry")).getLength() < 1)
 			throw new RuntimeException("No videos found for '"+query+"'");
 		LinkedList<YouTubeSearchResult> data = new LinkedList<YouTubeSearchResult>();
-		for (int x = 0; x < (engine == null ? 1 : Integer.valueOf(engine.config.getProperty("youtubeMaxSearchResults"))) && x < entries.getLength(); x++) {
+		for (int x = 0; x < entries.getLength(); x++) {
 			NodeList d = entries.item(x).getChildNodes();
 			int length, views, likes, dislikes, comments;
 			length = likes = dislikes = length = comments = views = 0;
@@ -320,8 +323,7 @@ public class YouTube implements AnnouncerHandler {
 				description = ((Element)d).getElementsByTagName("media:description").item(0).getFirstChild().getNodeValue().replaceAll("\\[rn]+", " ");
 			} catch (NullPointerException e1) { }
 
-			data.add(new YouTubeSearchResult(videoID, author, title, description, formatTime(length), length, views, likes, dislikes, comments));
-
+			data.add(new YouTubeSearchResult(videoID, author, Matcher.quoteReplacement(title), Matcher.quoteReplacement(description), formatTime(length), length, views, likes, dislikes, comments));
 
 		}
 		return data;
