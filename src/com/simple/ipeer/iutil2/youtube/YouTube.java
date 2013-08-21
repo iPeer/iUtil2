@@ -63,6 +63,12 @@ public class YouTube implements AnnouncerHandler {
 			settings.put("youtubeLinkRegex", ".*https?://(www.)?youtu(be.com|.be)/(watch\\?v=)?.*");
 			settings.put("youtubeGetIDRegex", "(?<=https?://(www.)?youtu(be.com|.be)/(watch\\?v=)?)[^=]*?( |$)");
 			settings.put("youtubeDescriptionLengthLimit", "140");
+			
+			// Search settings
+			
+			settings.put("youtubeSearchDescriptions", "false"); // Should descriptions be shown when a user searches for videos?
+			settings.put("youtubeMaxSearchResults",  "1");
+			settings.put("youtubeSearchFormat", "%C1%[%C2%%AUTHOR%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] %DASH% %C2%%VIDEOURL%");
 
 			engine.createConfigDefaults(settings);
 
@@ -297,6 +303,7 @@ public class YouTube implements AnnouncerHandler {
 			length = Integer.valueOf(((Element)d).getElementsByTagName("media:content").item(0).getAttributes().getNamedItem("duration").getNodeValue());
 			comments = Integer.valueOf(((Element)d).getElementsByTagName("gd:feedLink").item(0).getAttributes().getNamedItem("countHint").getNodeValue());
 
+			
 			// Needs to be checked for null values
 
 			try {

@@ -82,6 +82,10 @@ public class YouTubeSearchResult {
 		return this.videoID;
 	}
 	
+	public boolean hasDescription() {
+		return this.description != "" && this.description != null;
+	}
+	
 	@Override
 	public String toString() {
 		return "ID:"+getID()+"\nA:"+getAuthor()+"\nT:"+getTitle()+"\nD:"+getDescription()+"\nFL:"+getFormattedLength()+"\nL:"+getLength()+"\nV:"+getViews()+"\nLI:"+getLikes()+"\nDL:"+getDislikes()+"\nC:"+getComments();

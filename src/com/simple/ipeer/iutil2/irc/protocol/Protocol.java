@@ -8,12 +8,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.xml.sax.SAXException;
+
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.User;
 import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
+import com.simple.ipeer.iutil2.youtube.YouTubeSearchResult;
 
 public class Protocol {
 
@@ -154,71 +159,6 @@ public class Protocol {
 				engine.getProfiler().end();
 			}
 
-			// YouTube Links
-
-			if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
-				engine.getProfiler().start("YouTubeLinks");
-				int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
-				int curVid = 1;
-				String[] vids = message.split("(.be/|v=)");
-				for (int vn = 1; vn < vids.length && curVid++ <= maxVids; vn++) {
-					String videoid = "";
-					try {
-						videoid = vids[vn].split("[& ]")[0];
-					} catch (ArrayIndexOutOfBoundsException e) { continue; }
-					if (engine == null)
-						System.err.println(videoid);
-					HashMap<String, String> ytdata = new HashMap<String, String>();
-					try {
-						ytdata = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getVideoInfo(videoid);
-						String out = (engine == null ? "%C1%[%C2%%USER%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] (%C2%%VIEWS%%C1% views, %C2%%COMMENTS%%C1% comments, %C2%%LIKES%%C1% likes, %C2%%DISLIKES%%C1% dislikes) %DASH% %VIDEOURL%" : engine.config.getProperty("youtubeInfoFormat"))
-								.replaceAll("%USER%", ytdata.get("author"))
-								.replaceAll("%(VIDEO)?TITLE%", ytdata.get("title"))
-								.replaceAll("%(VIDEO)?LENGTH%", ytdata.get("duration"))
-								.replaceAll("%VIEWS%", ytdata.get("views"))
-								.replaceAll("%COMMENTS%", ytdata.get("comments"))
-								.replaceAll("%LIKES%", ytdata.get("likes"))
-								.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
-								.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
-						if (engine != null)
-							engine.send("PRIVMSG "+channel+" :"+out);
-						else
-							System.err.println(out.replaceAll("%C([0-9]+)?%", ""));
-						if (ytdata.containsKey("description")) {
-							String desc = "";
-							if ((engine == null ? "word" : engine.config.getProperty("youtubeDescriptionClippingMode")).equals("word")) {
-								String[] descData = ytdata.get("description").split(" ");
-								for (int x = 0; x < descData.length && desc.length() < Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))); x++) {
-									desc = desc+(desc.length() > 0 ? " " : "")+descData[x];
-								}
-							}
-							else
-								desc = ytdata.get("description").substring(0, Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))));
-							String description = (engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", desc+(desc.length() < ytdata.get("description").length() ? "..." : ""));
-							if (engine == null)
-								System.err.println(description.replaceAll("%C([0-9]+)?%", ""));
-							else
-								engine.send("PRIVMSG "+channel+" :"+description);			
-						}
-					} catch (IOException e) {
-						if (engine != null)
-							engine.send("PRIVMSG "+channel+" :Video not found: "+videoid);
-						else
-							System.err.println("Video not found: "+videoid);
-						engine.logError(e);
-					}
-					catch (Exception e) {
-						if (engine != null)
-							engine.send("PRIVMSG "+channel+" :An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
-						else
-							System.err.println("An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
-						engine.logError(e);
-					}
-				}
-				engine.getProfiler().end();
-			}
-
-
 			// Commands
 
 			if ((engine == null ? "@#.!" : engine.config.getProperty("commandCharacters")).contains(message.substring(0, 1))) {
@@ -297,7 +237,7 @@ public class Protocol {
 
 				}
 
-				else if (commandName.matches("(info(mation)?|status)") && isAdmin) {
+				else if (commandName.matches("(info(r?mation)?|status)") && isAdmin) {
 					long totalMemory = Runtime.getRuntime().totalMemory();
 					long freeMemory = Runtime.getRuntime().freeMemory();
 					long usedMemory = totalMemory - freeMemory;
@@ -419,6 +359,113 @@ public class Protocol {
 					}
 				}
 
+				else if (commandName.matches("y(ou)?t(ube)?(search)?")) {
+					engine.getProfiler().start("YTSearch");
+					try {
+						String query = message.split(commandName+" ")[1];
+						List<YouTubeSearchResult> results = (engine == null ? new YouTube(null) : (YouTube)engine.getAnnouncers().get("YouTube")).getSearchResults(query);
+						int result = 0;
+						for (YouTubeSearchResult r : results) {
+							result++;
+							String out = engine.config.getProperty("youtubeSearchFormat")
+									.replaceAll("%RESULT%", Integer.toString(result))
+									/*.replaceAll("%(TOTAL)?RESULTS%", Integer.toString(r.getTotalResults()))*/
+									.replaceAll("%(USER|(VIDEO)?AUTHOR)%", r.getAuthor())
+									.replaceAll("%(VIDEO)?TITLE%", r.getTitle())
+									.replaceAll("%(VIDEO)?LENGTH%", r.getFormattedLength())
+									.replaceAll("%VIEWS%", Integer.toString(r.getViews()))
+									.replaceAll("%COMMENTS%", Integer.toString(r.getComments()))
+									.replaceAll("%LIKES%", Integer.toString(r.getLikes()))
+									.replaceAll("%DISLIKES%", Integer.toString(r.getDislikes()))
+									.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+r.getID());
+							engine.send(sendPrefix+" :"+out);
+							if (engine.config.getProperty("youtubeSearchDescriptions").equals("true") && r.hasDescription())
+								engine.send(sendPrefix+" :"+engine.config.getProperty("youtubeInfoFormatDescription").replaceAll("%DESCRIPTION%", r.getDescription()));
+						}
+					}
+					catch (ArrayIndexOutOfBoundsException e) {
+						engine.send(sendPrefix+" :You must provide a search query!");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <query>");
+					}
+					catch (RuntimeException e) { 
+						e.printStackTrace();
+						engine.send(sendPrefix+" :"+e.getMessage());
+					}
+
+					catch (SAXException | IOException | ParserConfigurationException e) {
+						engine.logError(e);
+						engine.send(sendPrefix+" :Couldn't get search results because an error occured. Please inform iPeer of this error:");
+						engine.send(sendPrefix+" :"+e.toString()+" at "+e.getStackTrace()[0]);
+					}
+
+					engine.getProfiler().end();
+					
+				}
+
+				engine.getProfiler().end();
+			}
+
+			// YouTube Links
+
+			else if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
+				engine.getProfiler().start("YouTubeLinks");
+				int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
+				int curVid = 1;
+				String[] vids = message.split("(.be/|v=)");
+				for (int vn = 1; vn < vids.length && curVid++ <= maxVids; vn++) {
+					String videoid = "";
+					try {
+						videoid = vids[vn].split("[& ]")[0];
+					} catch (ArrayIndexOutOfBoundsException e) { continue; }
+					if (engine == null)
+						System.err.println(videoid);
+					HashMap<String, String> ytdata = new HashMap<String, String>();
+					try {
+						ytdata = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getVideoInfo(videoid);
+						String out = (engine == null ? "%C1%[%C2%%USER%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] (%C2%%VIEWS%%C1% views, %C2%%COMMENTS%%C1% comments, %C2%%LIKES%%C1% likes, %C2%%DISLIKES%%C1% dislikes) %DASH% %VIDEOURL%" : engine.config.getProperty("youtubeInfoFormat"))
+								.replaceAll("%USER%", ytdata.get("author"))
+								.replaceAll("%(VIDEO)?TITLE%", ytdata.get("title"))
+								.replaceAll("%(VIDEO)?LENGTH%", ytdata.get("duration"))
+								.replaceAll("%VIEWS%", ytdata.get("views"))
+								.replaceAll("%COMMENTS%", ytdata.get("comments"))
+								.replaceAll("%LIKES%", ytdata.get("likes"))
+								.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
+								.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
+						if (engine != null)
+							engine.send("PRIVMSG "+channel+" :"+out);
+						else
+							System.err.println(out.replaceAll("%C([0-9]+)?%", ""));
+						if (ytdata.containsKey("description")) {
+							String desc = "";
+							if ((engine == null ? "word" : engine.config.getProperty("youtubeDescriptionClippingMode")).equals("word")) {
+								String[] descData = ytdata.get("description").split(" ");
+								for (int x = 0; x < descData.length && desc.length() < Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))); x++) {
+									desc = desc+(desc.length() > 0 ? " " : "")+descData[x];
+								}
+							}
+							else
+								desc = ytdata.get("description").substring(0, Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))));
+							String description = (engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", desc+(desc.length() < ytdata.get("description").length() ? "..." : ""));
+							if (engine == null)
+								System.err.println(description.replaceAll("%C([0-9]+)?%", ""));
+							else
+								engine.send("PRIVMSG "+channel+" :"+description);			
+						}
+					} catch (IOException e) {
+						if (engine != null)
+							engine.send("PRIVMSG "+channel+" :Video not found: "+videoid);
+						else
+							System.err.println("Video not found: "+videoid);
+						engine.logError(e);
+					}
+					catch (Exception e) {
+						if (engine != null)
+							engine.send("PRIVMSG "+channel+" :An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
+						else
+							System.err.println("An error occured while attempting to retrieve info for video ID '"+videoid+"' ("+e.toString()+" at "+e.getStackTrace()[0]+")");
+						engine.logError(e);
+					}
+				}
 				engine.getProfiler().end();
 			}
 
