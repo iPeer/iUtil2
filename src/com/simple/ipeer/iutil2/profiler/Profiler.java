@@ -25,11 +25,11 @@ public class Profiler {
 	public Profiler() {
 		this.engine = Main.getMain();
 		if (engine != null) {
-		this.engine.log("Profiler is attempting to start...", "Profiler");
-		HashMap<String, String> defaultConfig = new HashMap<String, String>();
-		defaultConfig.put("profilerWarningTime", "100000000");
-		defaultConfig.put("profilerLogEnabled", "true");
-		this.engine.createConfigDefaults(defaultConfig);
+			this.engine.log("Profiler is attempting to start...", "Profiler");
+			HashMap<String, String> defaultConfig = new HashMap<String, String>();
+			defaultConfig.put("profilerWarningTime", "100000000");
+			defaultConfig.put("profilerLogEnabled", "true");
+			this.engine.createConfigDefaults(defaultConfig);
 		}
 		if (this.engine == null ? true : this.engine.config.getProperty("profilerLogEnabled").equals("true")) {
 			profilerLog = new File((engine == null ? "./logs/profiler.log" : this.engine.logDir+"/profiler.log"));
@@ -43,18 +43,17 @@ public class Profiler {
 				else
 					e.printStackTrace();
 			}
-		}
-		if (engine == null || engine.config.getProperty("profilerLogEnabled").equals("true"))
 			logData((profilerLog.length() > 0L ? "\n\n" : "")+"-- Profiler logging session starting at "+(new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()))+" --\n");
-		if (engine != null)
-			this.engine.log("Profiler was started succesfully.", "Profiler");
-		
+			if (engine != null)
+				this.engine.log("Profiler was started succesfully.", "Profiler");
+		}
+
 	}
 
 	public void startSection(String name) {
 
 		if ((this.engine == null ? true : Main.getMain().profilingEnabled())) {
-			
+
 			this.sectionName = (this.sectionName.length() > 0 ? this.sectionName+"." : "")+name;
 			this.sectionNames.add(this.sectionName);
 			this.sectionTimestamps.add(System.nanoTime());
@@ -77,7 +76,7 @@ public class Profiler {
 			this.profilerData.put(this.sectionName, difference);
 
 			String out = "'"+this.sectionName+"' complete after "+(difference / 1000000.0D)+"ms.";
-			
+
 			if (difference > Long.valueOf((engine == null ? "60000000000" : this.engine.config.getProperty("profilerWarningTime", "60000000000")))) {
 				out = "Something is running slow! '"+this.sectionName+"' took "+(difference / 1000000.0D)+"ms!";
 				if (engine != null && engine.config.getProperty("profilerLogEnabled").equals("true"))
@@ -86,10 +85,10 @@ public class Profiler {
 					System.err.println(out);
 
 			}
-			
-			 if (engine != null && engine.config.getProperty("debug").equals("true"))
-				 engine.log(out, "Profiler");
-			
+
+			if (engine != null && engine.config.getProperty("debug").equals("true"))
+				engine.log(out, "Profiler");
+
 			if (engine == null || this.engine.config.getProperty("profilerLogEnabled").equals("true"))
 				logData(out);
 			this.sectionName = (!this.sectionNames.isEmpty() ? this.sectionNames.get(this.sectionNames.size() - 1) : "");
@@ -116,12 +115,12 @@ public class Profiler {
 			}
 		}
 	}
-	
+
 	public HashMap<String, Long> profileData() {
 		return this.profilerData;
 	}
 
-/*	public static void main(String[] args) throws InterruptedException {
+	/*	public static void main(String[] args) throws InterruptedException {
 
 		Profiler p = new Profiler();
 		p.start("Test");;
