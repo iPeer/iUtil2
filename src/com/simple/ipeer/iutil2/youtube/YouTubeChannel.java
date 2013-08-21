@@ -57,11 +57,15 @@ public class YouTubeChannel implements Announcer, Runnable {
 
 
 //	public static void main(String[] args) {
-//		Channel c = new Channel("TheiPeer", null, new YouTube(null));
-//		c.lastUpload = "ZeGXGYSTOtc";
+//		YouTubeChannel c = new YouTubeChannel("TheiPeer", null, new YouTube(null));
+//		c.clearUploads();
+//		c.setSyncing(true);
 //		c.update();
-//
 //	}
+
+	private void clearUploads() {
+		this.channelUploads.clear();
+	}
 
 	@Override
 	public void run() {
@@ -107,17 +111,17 @@ public class YouTubeChannel implements Announcer, Runnable {
 				if (this.channelUploads.containsKey(videoID) || videoID.equals(this.lastUpload) || x > Integer.valueOf((this.isSyncing ? "0" : engine.config.getProperty("youtubeMaxUploads"))))
 					break;
 				try {
-					String author = data.item(12).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();
+					String author = ((Element)data).getElementsByTagName("author").item(0).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();
 					if (!this.realChannelName.equals(author))
 						this.realChannelName = author;
 				}
 				catch (NullPointerException e) { }
-				String title = data.item(5).getChildNodes().item(0).getNodeValue();
+				String title = ((Element)data).getElementsByTagName("title").item(0).getChildNodes().item(0).getNodeValue();
 				int duration = Integer.valueOf(((Element)data).getElementsByTagName("yt:duration").item(0).getAttributes().getNamedItem("seconds").getNodeValue());
 				if (!channelUploads.containsKey(videoID)) {
 					Upload u = new Upload(title, duration, videoID);
 					channelUploads.put(videoID, u);
-					while (channelUploads.size() > Integer.valueOf(engine.config.getProperty("youtubeMaxHistory")))
+					while (channelUploads.size() > (engine == null ? 10 : Integer.valueOf(engine.config.getProperty("youtubeMaxHistory"))))
 						channelUploads.remove(channelUploads.keySet().iterator().next());
 					announce.add(u);
 				}
@@ -197,7 +201,7 @@ public class YouTubeChannel implements Announcer, Runnable {
 					.replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(title)) // Fix for "Illegal group reference" when title contains regex characters such as $.
 					.replaceAll("(%(VIDEO)?(LENGTH|DURATION)%)", time)
 					.replaceAll("%USER%", this.realChannelName)
-					.replaceAll("%VIDEOLINK%", engine.config.getProperty("youtubeURLPrefix")+vid);
+					.replaceAll("%VIDEOLINK%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix")+vid));
 			if (engine == null)	
 				System.err.println(out);
 			else

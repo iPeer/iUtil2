@@ -388,7 +388,6 @@ public class Protocol {
 						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <query>");
 					}
 					catch (RuntimeException e) { 
-						e.printStackTrace();
 						engine.send(sendPrefix+" :"+e.getMessage());
 					}
 
