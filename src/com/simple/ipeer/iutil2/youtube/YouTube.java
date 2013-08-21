@@ -62,7 +62,7 @@ public class YouTube implements AnnouncerHandler {
 			settings.put("youtubeDescriptionClippingMode", "word");
 			settings.put("youtubeMaxProcessedLinks", "2");
 			settings.put("youtubeLinkRegex", ".*https?://(www.)?youtu(be.com|.be)/(watch\\?v=)?.*");
-			settings.put("youtubeGetIDRegex", "(?<=https?://(www.)?youtu(be.com|.be)/(watch\\?v=)?)[^=]*?( |$)");
+			settings.put("youtubeGetIDRegex", "(?<=https?://(www.)?youtu(be.com|.be)/(watch\\?v=)?)[^=]*?( |$)"); // Deprecated
 			settings.put("youtubeDescriptionLengthLimit", "140");
 			
 			// Search settings

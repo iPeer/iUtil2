@@ -35,6 +35,7 @@ import com.simple.ipeer.iutil2.irc.SSLUtils;
 import com.simple.ipeer.iutil2.irc.Server;
 import com.simple.ipeer.iutil2.irc.protocol.Protocol;
 import com.simple.ipeer.iutil2.profiler.Profiler;
+import com.simple.ipeer.iutil2.tell.Tell;
 import com.simple.ipeer.iutil2.twitch.Twitch;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 
@@ -89,6 +90,7 @@ public class Main implements Runnable {
 
 	public List<OfflineMessage> offlineMessages = new ArrayList<OfflineMessage>();
 	private Console console;
+	private Tell tell;
 
 
 	public static void main(String[] args) {
@@ -183,6 +185,7 @@ public class Main implements Runnable {
 		announcers = new HashMap<String, AnnouncerHandler>();
 		announcers.put("YouTube", new YouTube(this));
 		announcers.put("Twitch", new Twitch(this));
+		tell = new Tell(this);
 		console = new Console(this);
 		profiler = new Profiler();
 
@@ -437,9 +440,6 @@ public class Main implements Runnable {
 		if (CHANNEL_LIST == null)
 			CHANNEL_LIST = new HashMap<String, Channel>();
 		send("JOIN "+channel);
-		CHANNEL_LIST.put(channel.toLowerCase(), new Channel(channel.toLowerCase()));
-		log("Now in "+CHANNEL_LIST.size()+" channels.");
-		send("WHO "+channel);
 	}
 
 	public void send(String prefix, List<String> data, boolean log, boolean sinc) {
@@ -537,8 +537,6 @@ public class Main implements Runnable {
 			send("PART "+channel+" :"+message);
 		else
 			send("PART "+channel);
-		CHANNEL_LIST.remove(channel.toLowerCase());
-		log("Now in "+CHANNEL_LIST.size()+" channels.");
 	}
 
 	public void amsg(String msg) {
@@ -609,5 +607,8 @@ public class Main implements Runnable {
 		return a;
 	}
 
+	public Tell getTell() {
+		return this.tell;
+	}
 
 }

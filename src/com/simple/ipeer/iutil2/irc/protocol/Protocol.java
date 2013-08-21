@@ -54,10 +54,10 @@ public class Protocol {
 
 		/* CONNECTION RELATED STUFF */
 
-		else if (line.indexOf("001") >= 0) // Server address
+		else if (line.split(" ")[1].equals("001")) // Server address
 			engine.CURRENT_SERVER = line.split(" ")[0].substring(1);
 
-		else if (line.indexOf("005") >= 0) {	// Network settings	
+		else if (line.split(" ")[1].equals("005")) {	// Network settings	
 			if (engine.NETWORK_SETTINGS == null)
 				engine.NETWORK_SETTINGS = new HashMap<String, String>();
 			String[] a = line.split(" ");
@@ -69,12 +69,12 @@ public class Protocol {
 			}
 		}
 
-		else if (line.indexOf("004") >= 0) {
+		else if (line.split(" ")[1].equals("004")) {
 			engine.send(engine.config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(engine.readPassword())), false /* We have to remember not to log this line because passwords. */);
 			engine.send("MODE "+engine.CURRENT_NICK+" "+engine.config.getProperty("connectModes"));
 		}
 
-		else if (line.indexOf("433") >= 0) {
+		else if (line.split(" ")[1].equals("433")) {
 			String newNick = "";
 			try {
 				int n = Integer.valueOf(engine.CURRENT_NICK.substring(engine.CURRENT_NICK.length() - 1));
@@ -87,7 +87,7 @@ public class Protocol {
 			engine.changeNick(newNick);
 		}
 
-		else if (line.indexOf("251") >= 0) {
+		else if (line.split(" ")[1].equals("251")) {
 			engine.CURRENT_NETWORK = engine.NETWORK_SETTINGS.get("NETWORK");
 			if (engine.CURRENT_NETWORK == null || engine.CURRENT_NETWORK.equals(""))
 				engine.CURRENT_NETWORK = "UNKNOWN";
@@ -359,6 +359,46 @@ public class Protocol {
 					}
 				}
 
+				else if (commandName.matches("^(memo|tell)")) {
+					if (message.split(" ").length < 3) {
+						engine.send(sendPrefix+" :You need to provide a nick to send the message to and the message you want to send them.");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <nick> <message>");
+					}
+					else {
+						String n = message.split(commandName+" ")[1].split(" ")[0];
+						String msg = message.split(n+" ")[1];
+						if (engine.getChannelList().get(channel.toLowerCase()).getUserList().containsKey(n) && !n.equals(nick))
+							engine.send(sendPrefix+" :Why not tell them yourself? They're on this very channel right now!");
+						else {
+							try {
+								engine.getTell().addMessage(nick, n, msg);
+								engine.send(sendPrefix+" :"+(n.equals(nick) ? "Trying to send a message to your future self eh, "+nick+"? Very well, it is done." : "I'll be sure to tell "+n+" that next time I see them, "+nick+"."));
+							}
+							catch (RuntimeException e) {
+								engine.send(sendPrefix+" :"+e.getMessage());
+							}
+						}
+					}
+
+				}
+
+				else if (commandName.matches("(cancel|del(ete)?|remove)(memo|tell)")) {
+					if (message.split(" ").length < 2) {
+						engine.send(sendPrefix+" :You need to provide a nick of whom you wish to cancel your last message for.");
+						engine.send(sendPrefix+" :"+commandPrefix+commandName+" <nick>");
+					}
+					else {
+						String n = message.split(commandName+" ")[1].split(" ")[0];
+						try {
+							engine.getTell().cancelMessage(nick, n);
+							engine.send(sendPrefix+" :You last message to "+n+" has been cancelled.");
+						}
+						catch (RuntimeException e) {
+							engine.send(sendPrefix+" :"+e.getMessage());
+						}
+					}
+				}
+
 				else if (commandName.matches("y(ou)?t(ube)?(search)?")) {
 					engine.getProfiler().start("YTSearch");
 					try {
@@ -398,7 +438,7 @@ public class Protocol {
 					}
 
 					engine.getProfiler().end();
-					
+
 				}
 
 				engine.getProfiler().end();
@@ -483,6 +523,7 @@ public class Protocol {
 					c.getUserList().put(newNick, b);
 				}
 			}
+			engine.getTell().sendMessages(newNick);
 			engine.getProfiler().end();
 		}
 
@@ -513,8 +554,16 @@ public class Protocol {
 			String channel = line.split(" ")[2].toLowerCase();
 			if (channel.startsWith(":"))
 				channel = channel.substring(1);
-			if (type.equals("JOIN") && !nick.equals(engine.CURRENT_NICK)) { // Why are channels in joins prefixed with colons but parts aren't?
-				engine.send("WHO +cn "+channel+" "+nick);
+			if (type.equals("JOIN")) { // Why are channels in joins prefixed with colons but parts aren't?
+				if (nick.equals(engine.CURRENT_NICK)) {
+					engine.send("WHO "+channel);
+					engine.getChannelList().put(channel.toLowerCase(), new Channel(channel.toLowerCase()));
+					engine.log("Now in "+engine.getChannelList().size()+" channels.");
+				}
+				else {
+					engine.send("WHO +cn "+channel+" "+nick);
+					engine.getTell().sendMessages(nick);
+				}
 			}
 			else if (type.equals("QUIT")) {
 				for (Channel c : engine.getChannelList().values()) {
@@ -524,12 +573,17 @@ public class Protocol {
 				}
 			}
 			else {
-				engine.getChannelList().get(channel).getUserList().remove(nick);
+				if (!nick.equals(engine.CURRENT_NICK))
+					engine.getChannelList().get(channel).getUserList().remove(nick);
+				else {
+					engine.getChannelList().remove(channel.toLowerCase());
+					engine.log("Now in "+engine.getChannelList().size()+" channels.");
+				}
 			}
 			engine.getProfiler().end();
 		}
 
-		else if (line.split(" ")[1].equals("352")) {
+		else if (line.split(" ")[1].equals("352")) { // WHO
 			engine.getProfiler().start("WHO");
 			String[] a = line.split(" ");
 			String channel = a[3].toLowerCase();
@@ -541,14 +595,18 @@ public class Protocol {
 			User b = new User(a[4], a[5], a[6], a[7], a[8], realName);
 			b.setUpdateTime(System.currentTimeMillis());
 			engine.getChannelList().get(channel).getUserList().put(a[7], b);
+			//engine.getTell().sendMessages(a[7]);
 			engine.getProfiler().end();
 		}
-
-		else if (line.split(" ")[1].equals("474")) {
-			String channel = line.split(" ")[3].toLowerCase();
-			engine.log("Unable to join channel "+channel+" (banned)");
-			if (engine.getChannelList().containsKey(channel))
-				engine.getChannelList().remove(channel);
+		
+		else if (line.split(" ")[1].equals("353")) { // NAMES
+			String[] data = line.split(" :")[1].split(" ");
+			for (String a : data) {
+				String nick = (engine.NETWORK_SETTINGS.get("STATUSMSG").contains(a.split("!")[0].substring(0, 1)) ? a.split("!")[0].substring(1) : a.split("!")[0]);
+				if (nick.equals(engine.CURRENT_NICK))
+					continue;
+				engine.getTell().sendMessages(nick);
+			}
 		}
 
 		if (engine != null)

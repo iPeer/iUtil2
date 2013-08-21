@@ -63,7 +63,7 @@ public class YouTubeChannel implements Announcer, Runnable {
 //		c.update();
 //	}
 
-	private void clearUploads() {
+	public void clearUploads() {
 		this.channelUploads.clear();
 	}
 
