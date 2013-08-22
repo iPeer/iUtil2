@@ -14,8 +14,7 @@ import org.xml.sax.SAXException;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
-import com.simple.ipeer.iutil2.irc.Channel;
-import com.simple.ipeer.iutil2.irc.User;
+import com.simple.ipeer.iutil2.irc.ial.User;
 import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 import com.simple.ipeer.iutil2.youtube.YouTubeSearchResult;
@@ -39,13 +38,13 @@ public class Protocol {
 
 	public void parse(String line, Main engine) {
 		// We log the whole line for debug purposes
-		if (engine != null)
+		if (engine != null && (!line.startsWith("PING ") && engine.config.getProperty("debug").equals("true")))
 			engine.log("<- "+line, "IRC");
 
 
 		// When the server PINGs us, we need to make sure we reply.
 		if (line.startsWith("PING "))
-			engine.send("PONG "+line.substring(5));
+			engine.send("PONG "+line.substring(5), engine.config.getProperty("debug").equals("true"));
 
 		// Handle being disconnected by the server
 		else if (line.startsWith("ERROR :")) {
@@ -71,17 +70,17 @@ public class Protocol {
 
 		else if (line.split(" ")[1].equals("004")) {
 			engine.send(engine.config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(engine.readPassword())), false /* We have to remember not to log this line because passwords. */);
-			engine.send("MODE "+engine.CURRENT_NICK+" "+engine.config.getProperty("connectModes"));
+			engine.send("MODE "+engine.getIAL().getCurrentNick()+" "+engine.config.getProperty("connectModes"));
 		}
 
 		else if (line.split(" ")[1].equals("433")) {
 			String newNick = "";
 			try {
-				int n = Integer.valueOf(engine.CURRENT_NICK.substring(engine.CURRENT_NICK.length() - 1));
-				newNick = engine.CURRENT_NICK.substring(0, engine.CURRENT_NICK.length() - 1)+n++;
+				int n = Integer.valueOf(engine.getIAL().getCurrentNick().substring(engine.getIAL().getCurrentNick().length() - 1));
+				newNick = engine.getIAL().getCurrentNick().substring(0, engine.getIAL().getCurrentNick().length() - 1)+n++;
 			}
 			catch (NumberFormatException e) {
-				newNick = engine.CURRENT_NICK+"2";
+				newNick = engine.getIAL().getCurrentNick()+"2";
 			}
 			engine.log("Nick is in use, trying "+newNick);
 			engine.changeNick(newNick);
@@ -110,8 +109,7 @@ public class Protocol {
 
 		//Handle invites
 		else if (line.split(" ")[1].equals("INVITE")) {
-			String inviteChannel = line.split(" ")[3].substring(1);
-			engine.joinChannel(inviteChannel);
+			engine.joinChannel(line.split(" ")[3].substring(1));
 		}
 
 		// Handle actual chat messages
@@ -122,28 +120,20 @@ public class Protocol {
 			String address = nick;
 			String channel = nick;
 			String[] data = line.split(" ");
+			channel = data[2];
 			if (data[0].contains("!")) {
 				nick = data[0].split("!")[0].substring(1);
 				address = data[0].split("!")[1].split(" ")[0];
+				engine.getIAL().updateAddressIfNeeded(channel, nick, address);
 			}
 			else {
 				nick = data[0].substring(1);
 				address = nick;
 			}
-			channel = data[2];
-			if (engine != null && channel.equals(engine.CURRENT_NICK))
+			if (engine != null && channel.equals(engine.getIAL().getCurrentNick()))
 				channel = nick;
-			String[] messageData = line.split(":");
-			String message = "";
-			if (messageData.length > 2) {
-				for (int x = 2; x < messageData.length; x++) {
-					message = message+":"+messageData[x];
-				}
-				message = message.substring(1);
-			}
-			else {
-				message = ":";
-			}
+
+			String message = line.split(" :")[1];
 
 			// CTCPs
 
@@ -165,10 +155,10 @@ public class Protocol {
 				engine.getProfiler().start("Commands");
 				String sendPrefix = ((engine == null ? "#@" : engine.config.getProperty("publicCommandCharacters")).contains(message.substring(0, 1)) ? "PRIVMSG "+channel : "NOTICE "+nick);
 				String commandPrefix = message.substring(0, 1);
-				boolean isAdmin = engine == null || engine.getChannelList().get(engine.config.getProperty("debugChannel").toLowerCase()).getUserList().get(nick).isOp();
+				boolean isAdmin = engine == null || engine.getIAL().userHasModes(nick, engine.config.getProperty("debugChannel"), "o");
 				String commandName = message.split(" ")[0].substring(1).toLowerCase();
 
-				if (commandName.equals("quit") && isAdmin) {
+				if (commandName.matches("(q{3}|quit|stop|die)") && isAdmin) {
 					String quitMessage = engine.config.getProperty("quitMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address);
 					engine.quit(quitMessage);
 				}
@@ -217,7 +207,7 @@ public class Protocol {
 				else if (commandName.equals("part") && isAdmin) {
 					try {
 						String partChannel = message.split(" ")[1];
-						if (engine.getChannelList().containsKey(partChannel))
+						if (engine.getIAL().getChannelList().containsKey(partChannel))
 							engine.partChannel(partChannel, engine.config.getProperty("partMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address));
 						else
 							engine.send(sendPrefix+" :I am not in that channel!");
@@ -367,7 +357,7 @@ public class Protocol {
 					else {
 						String n = message.split(commandName+" ")[1].split(" ")[0];
 						String msg = message.split(n+" ")[1];
-						if (engine.getChannelList().get(channel.toLowerCase()).getUserList().containsKey(n) && !n.equals(nick))
+						if (engine.getIAL().isOnChannel(n, channel) && !n.equals(nick))
 							engine.send(sendPrefix+" :Why not tell them yourself? They're on this very channel right now!");
 						else {
 							try {
@@ -439,6 +429,14 @@ public class Protocol {
 
 					engine.getProfiler().end();
 
+				}
+
+				else if (commandName.matches("myinfo|whoami")) {
+					engine.send(sendPrefix+" :You are "+engine.getIAL().getUser(channel, nick).getFullAddress()+"."+(engine.getIAL().getUser(channel, nick).getModes().equals("") ? "" : " You have modes +"+engine.getIAL().getUser(channel, nick).getModes()));
+				}
+
+				else if (commandName.matches("yourinfo|whoareyou") && isAdmin) {
+					engine.send(sendPrefix+" :I am "+engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getFullAddress()+"."+(engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getModes().equals("") ? "" : " I have modes +"+engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getModes()));
 				}
 
 				engine.getProfiler().end();
@@ -514,15 +512,7 @@ public class Protocol {
 			engine.getProfiler().start("Nicks");
 			String nick = line.split("!")[0].substring(1);
 			String newNick = line.split(":")[2];
-			for (Channel c : engine.getChannelList().values()) {
-				if (c.getUserList().containsKey(nick)) {
-					User a = c.getUserList().get(nick);
-					User b = new User(a.identd, a.address, a.server, newNick, a.modes, a.realname);
-					b.setUpdateTime(System.currentTimeMillis());
-					c.getUserList().remove(nick);
-					c.getUserList().put(newNick, b);
-				}
-			}
+			engine.getIAL().processNickChange(nick, newNick);
 			engine.getTell().sendMessages(newNick);
 			engine.getProfiler().end();
 		}
@@ -530,18 +520,13 @@ public class Protocol {
 		else if (line.split(" ")[1].equals("MODE")) {
 			engine.getProfiler().start("Modes");
 			String[] data = line.split(" ");
-			if (data.length < 5)
+			if (data.length > 3 && engine.NETWORK_SETTINGS.get("CHANTYPES").contains(data[2].substring(0, 1)))
+				engine.getIAL().updateAddressIfNeeded(data[2], data[0].substring(1).split("!")[0], data[0].substring(1).split("!")[1]);
+			if (data.length < 5) {
+				engine.getProfiler().end();
 				return;
-			String channel = data[2];
-			List<String> updateUsers = new ArrayList<String>();
-			for (int x = 4; x < data.length; x++) {
-				if (!updateUsers.contains(data[x]) && engine.getChannelList().get(channel.toLowerCase()).getUserList().containsKey(data[x]) && engine.getChannelList().get(channel.toLowerCase()).getUserList().get(data[x]).canUpdate())
-					updateUsers.add(data[x]);
 			}
-			for (String user : updateUsers) {
-				engine.send("WHO +cn "+channel+" "+user);
-			}
-
+			engine.getIAL().parseModes(data[2], data[3], line.split(data[3].replaceAll("\\+", "\\\\\\+")+" ")[1]);
 			engine.getProfiler().end();
 
 		}
@@ -555,56 +540,63 @@ public class Protocol {
 			if (channel.startsWith(":"))
 				channel = channel.substring(1);
 			if (type.equals("JOIN")) { // Why are channels in joins prefixed with colons but parts aren't?
-				if (nick.equals(engine.CURRENT_NICK)) {
-					engine.send("WHO "+channel);
-					engine.getChannelList().put(channel.toLowerCase(), new Channel(channel.toLowerCase()));
-					engine.log("Now in "+engine.getChannelList().size()+" channels.");
-				}
-				else {
-					engine.send("WHO +cn "+channel+" "+nick);
+				if (nick.equals(engine.getIAL().getCurrentNick()))
+					engine.getIAL().registerChannel(channel);
+				else
 					engine.getTell().sendMessages(nick);
-				}
+				User user = new User(nick);
+				user.setAddressFromFull(line.split(" ")[0].substring(1));
+				engine.getIAL().registerNick(channel, user);
 			}
 			else if (type.equals("QUIT")) {
-				for (Channel c : engine.getChannelList().values()) {
-					if (c.getUserList().containsKey(nick)) {
-						c.getUserList().remove(nick);
-					}
-				}
+				engine.getIAL().unregisterQuittingNick(nick);
 			}
 			else {
-				if (!nick.equals(engine.CURRENT_NICK))
-					engine.getChannelList().get(channel).getUserList().remove(nick);
+				if (!nick.equals(engine.getIAL().getCurrentNick()))
+					engine.getIAL().unregisterNick(channel, nick);
 				else {
-					engine.getChannelList().remove(channel.toLowerCase());
-					engine.log("Now in "+engine.getChannelList().size()+" channels.");
+					engine.getIAL().unregisterChannel(channel);
 				}
 			}
 			engine.getProfiler().end();
 		}
 
-		else if (line.split(" ")[1].equals("352")) { // WHO
-			engine.getProfiler().start("WHO");
-			String[] a = line.split(" ");
-			String channel = a[3].toLowerCase();
-			String realName = line.split(":")[2];
-			if (!engine.getChannelList().containsKey(channel)) {
-				engine.log("Ignoring WHO data from "+channel+" because we're not in it.");
-				return;
-			}
-			User b = new User(a[4], a[5], a[6], a[7], a[8], realName);
-			b.setUpdateTime(System.currentTimeMillis());
-			engine.getChannelList().get(channel).getUserList().put(a[7], b);
-			//engine.getTell().sendMessages(a[7]);
-			engine.getProfiler().end();
-		}
-		
+		//		else if (line.split(" ")[1].equals("352")) { // WHO
+		//			engine.getProfiler().start("WHO");
+		//			String[] a = line.split(" ");
+		//			String channel = a[3].toLowerCase();
+		//			String realName = line.split(":")[2];
+		//			if (!engine.getChannelList().containsKey(channel)) {
+		//				engine.log("Ignoring WHO data from "+channel+" because we're not in it.");
+		//				return;
+		//			}
+		//			User b = new User(a[4], a[5], a[6], a[7], a[8], realName);
+		//			b.setUpdateTime(System.currentTimeMillis());
+		//			engine.getChannelList().get(channel).getUserList().put(a[7], b);
+		//			//engine.getTell().sendMessages(a[7]);
+		//			engine.getProfiler().end();
+		//		}
+
 		else if (line.split(" ")[1].equals("353")) { // NAMES
 			String[] data = line.split(" :")[1].split(" ");
+			String channel = line.split(" ")[4];
+			String[] modeMap = engine.NETWORK_SETTINGS.get("PREFIX").substring(1).replaceAll("\\+", "\\\\\\+").split("\\)");
 			for (String a : data) {
-				String nick = (engine.NETWORK_SETTINGS.get("STATUSMSG").contains(a.split("!")[0].substring(0, 1)) ? a.split("!")[0].substring(1) : a.split("!")[0]);
-				if (nick.equals(engine.CURRENT_NICK))
-					continue;
+				String modes = "";
+				String[] nickData = a.split("!");
+				String nick = nickData[0].replaceAll("\\+", "\\\\\\+");
+				for (int x = 0; modeMap[1].contains(String.valueOf(nick.charAt(x))); x++) {
+					modes += modeMap[0].charAt(modeMap[1].indexOf(nick.charAt(x)));
+					nick = nick.substring(1);
+				}
+				User user = new User(nick);
+				if (!modes.equals(""))
+					user.setModes(modes);
+				if (nickData.length > 1) {
+					user.setAddress(nickData[1].split("@")[1]);
+					user.setIdent(nickData[1].split("@")[0]);
+				}
+				engine.getIAL().registerNick(channel, user);
 				engine.getTell().sendMessages(nick);
 			}
 		}

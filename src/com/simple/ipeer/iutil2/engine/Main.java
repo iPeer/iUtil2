@@ -30,9 +30,9 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 import com.simple.ipeer.iutil2.console.Console;
-import com.simple.ipeer.iutil2.irc.Channel;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
 import com.simple.ipeer.iutil2.irc.Server;
+import com.simple.ipeer.iutil2.irc.ial.IAL;
 import com.simple.ipeer.iutil2.irc.protocol.Protocol;
 import com.simple.ipeer.iutil2.profiler.Profiler;
 import com.simple.ipeer.iutil2.tell.Tell;
@@ -41,7 +41,7 @@ import com.simple.ipeer.iutil2.youtube.YouTube;
 
 public class Main implements Runnable {
 
-	public final String BOT_VERSION = "0.181";
+	public final String BOT_VERSION = "0.217";
 
 	private static final File DEFAULT_CONFIG_DIR = new File("./config");
 	private static final Server DEFAULT_SERVER = new Server("irc.swiftirc.net", false, 6667);
@@ -65,7 +65,6 @@ public class Main implements Runnable {
 	public File errorFile;
 	public FileWriter logWriter;
 	public FileWriter errorWriter;
-	public String CURRENT_NICK;
 	public Boolean REQUESTED_QUIT = false;
 	public String CURRENT_SERVER;
 	public String CURRENT_NETWORK;
@@ -79,7 +78,6 @@ public class Main implements Runnable {
 	private Socket connection;
 	private BufferedReader in;
 	private BufferedWriter out;
-	private HashMap<String, Channel> CHANNEL_LIST;
 	private boolean SERVER_REGISTERED = false;
 	private boolean textFormatting = true;
 	private int connectionRetries = 0;
@@ -91,6 +89,7 @@ public class Main implements Runnable {
 	public List<OfflineMessage> offlineMessages = new ArrayList<OfflineMessage>();
 	private Console console;
 	private Tell tell;
+	private IAL ial;
 
 
 	public static void main(String[] args) {
@@ -188,6 +187,7 @@ public class Main implements Runnable {
 		tell = new Tell(this);
 		console = new Console(this);
 		profiler = new Profiler();
+		ial = new IAL(this);
 
 		// Now everything should be okay and we can start the bot...
 
@@ -396,7 +396,7 @@ public class Main implements Runnable {
 			String line = "";
 			try {
 				Protocol protocol = new Protocol();
-
+				ial.clearIAL();
 				while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
 					getProfiler().startSection("Incoming");
 					addReceivedBytes(line.getBytes().length);
@@ -427,7 +427,8 @@ public class Main implements Runnable {
 	}
 
 	public void changeNick(String nick) {
-		CURRENT_NICK = nick;
+		getIAL().processNickChange(getIAL().getCurrentNick(), nick);
+		getIAL().setCurrentNick(nick);
 		send("NICK "+nick+"\r\n", true, true);
 		if (!SERVER_REGISTERED) {
 			send("USER "+nick+" ipeer.auron.co.uk "+nick+": iPeer's Java Utility Bot\r\n", true, true);
@@ -437,8 +438,6 @@ public class Main implements Runnable {
 	}
 
 	public void joinChannel(String channel) {
-		if (CHANNEL_LIST == null)
-			CHANNEL_LIST = new HashMap<String, Channel>();
 		send("JOIN "+channel);
 	}
 
@@ -491,10 +490,6 @@ public class Main implements Runnable {
 		engine.getProfiler().end();
 	}
 
-	public HashMap<String, Channel> getChannelList() {
-		return CHANNEL_LIST;
-	}
-
 	public void quit(String quitMessage) {
 		quit(quitMessage, false);
 	}
@@ -540,9 +535,9 @@ public class Main implements Runnable {
 	}
 
 	public void amsg(String msg) {
-		for (Channel c : CHANNEL_LIST.values())
-			if (!config.getProperty("noAMSG").toLowerCase().contains(c.getName()))
-				send("PRIVMSG "+c.getName()+" :"+msg);
+		for (String c : getIAL().getChannelList().keySet())
+			if (!config.getProperty("noAMSG").toLowerCase().contains(c))
+				send("PRIVMSG "+c+" :"+msg);
 
 	}
 
@@ -609,6 +604,10 @@ public class Main implements Runnable {
 
 	public Tell getTell() {
 		return this.tell;
+	}
+	
+	public IAL getIAL() {
+		return this.ial;
 	}
 
 }
