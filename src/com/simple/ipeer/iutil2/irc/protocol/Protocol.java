@@ -452,7 +452,7 @@ public class Protocol {
 				for (int vn = 1; vn < vids.length && curVid++ <= maxVids; vn++) {
 					String videoid = "";
 					try {
-						videoid = vids[vn].split("[& ]")[0];
+						videoid = vids[vn].split("[&\\? ]")[0];
 					} catch (ArrayIndexOutOfBoundsException e) { continue; }
 					if (engine == null)
 						System.err.println(videoid);
