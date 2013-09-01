@@ -19,6 +19,7 @@ public class Twitch implements AnnouncerHandler {
 	private Main engine;
 	private HashMap<String, TwitchChannel> users;
 	public List<TwitchChannel> waitingToSync = new ArrayList<TwitchChannel>();
+	private boolean isSyncing = false;
 	
 	public Twitch (Main engine) {
 		engine.log("Twitch announcer is starting up.", "Twitch");
@@ -164,6 +165,18 @@ public class Twitch implements AnnouncerHandler {
 	@Override
 	public long timeTilUpdate() {
 		return this.users.values().iterator().next().timeTilUpdate();
+	}
+
+	public void syncChannelsIfNotSyncing() {
+		if (!waitingToSync.isEmpty() && !isSyncing) {
+			isSyncing = true;
+			Iterator<TwitchChannel> it = waitingToSync.iterator();
+			while (it.hasNext()) {
+				(it.next()).startIfNotRunning();
+				it.remove();
+			}
+			isSyncing = false;
+		}
 	}
 
 }

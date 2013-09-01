@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
@@ -46,14 +45,7 @@ public class TwitchChannel implements Announcer, Runnable {
 	@Override
 	public void run() {
 		while (this.isRunning && !this.thread.isInterrupted()) {
-			if (engine != null)
-				if (twitch != null && !twitch.waitingToSync.isEmpty()) {
-					Iterator<TwitchChannel> it = twitch.waitingToSync.iterator();
-					while (it.hasNext()) {
-						(it.next()).startIfNotRunning();
-						it.remove();
-					}
-				}
+			twitch.syncChannelsIfNotSyncing();
 			update();
 			this.lastUpdate = System.currentTimeMillis();
 			try {
