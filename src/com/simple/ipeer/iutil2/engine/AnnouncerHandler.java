@@ -9,5 +9,7 @@ public interface AnnouncerHandler {
 	public void stopAll();
 	public void update(String name);
 	public long timeTilUpdate();
+	public long getUpdateDelay();
+	public void scheduleThreadRestart(Object channel);
 	
 }

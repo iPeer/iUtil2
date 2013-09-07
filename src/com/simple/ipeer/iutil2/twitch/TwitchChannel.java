@@ -27,6 +27,7 @@ public class TwitchChannel implements Announcer, Runnable {
 	private Thread thread;
 	private Twitch twitch;
 	private File cacheFile;
+	private boolean shouldUpdate = true;
 
 	public TwitchChannel(String name, Main engine, Twitch twitch) {
 		this.engine = engine;
@@ -46,8 +47,12 @@ public class TwitchChannel implements Announcer, Runnable {
 	public void run() {
 		while (this.isRunning && !this.thread.isInterrupted()) {
 			twitch.syncChannelsIfNotSyncing();
-			update();
-			this.lastUpdate = System.currentTimeMillis();
+			if (shouldUpdate) {
+				update();
+				lastUpdate = System.currentTimeMillis();
+			}
+			else
+				this.shouldUpdate(true);
 			try {
 				Thread.sleep(Long.valueOf((engine == null ? "600000" : engine.config.getProperty("twitchUpdateDelay"))));
 			}
@@ -55,7 +60,7 @@ public class TwitchChannel implements Announcer, Runnable {
 			catch (Exception e) { 
 				if (engine != null)
 					engine.log("An error occurred during run() method of twitch user "+this.channelName, "Twitch");
-				engine.logError(e, "Twitch");
+				engine.logError(e, "Twitch", this.channelName);
 			}
 		}
 		if (engine != null)
@@ -103,7 +108,9 @@ public class TwitchChannel implements Announcer, Runnable {
 		catch (Exception e) {
 			if (engine != null)
 				engine.log("There was a problem while updating Twitch user "+this.channelName);
-			engine.logError(e, "Twitch");
+			engine.logError(e, "Twitch", this.channelName);
+			if (!e.toString().contains("Server returned HTTP response code: 502 for URL")) // Twitch's API throws this crap way too often.
+				twitch.scheduleThreadRestart(this);
 		}
 
 
@@ -214,6 +221,12 @@ public class TwitchChannel implements Announcer, Runnable {
 
 	public String getName() {
 		return this.channelName;
+	}
+
+
+	@Override
+	public void shouldUpdate(boolean b) {
+		this.shouldUpdate = b;
 	}
 
 }

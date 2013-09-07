@@ -9,5 +9,6 @@ public interface Announcer {
 	public void startIfNotRunning();
 	public void removeCache();
 	public void stopIfRunning();
+	public void shouldUpdate(boolean b);
 	
 }

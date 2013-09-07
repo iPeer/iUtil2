@@ -37,6 +37,7 @@ public class YouTubeChannel implements Announcer, Runnable {
 	private String lastUpload = "";
 	private boolean isSyncing = false;
 	private File cacheFile;
+	private boolean shouldUpdate = true;
 
 	public YouTubeChannel (String name, Main engine, YouTube youtube) {
 		this.channelName = this.realChannelName = name;
@@ -56,12 +57,12 @@ public class YouTubeChannel implements Announcer, Runnable {
 	}
 
 
-//	public static void main(String[] args) {
-//		YouTubeChannel c = new YouTubeChannel("TheiPeer", null, new YouTube(null));
-//		c.clearUploads();
-//		c.setSyncing(true);
-//		c.update();
-//	}
+	public static void main(String[] args) {
+		YouTubeChannel c = new YouTubeChannel("TheiPeer", null, new YouTube(null));
+		c.clearUploads();
+		c.setSyncing(true);
+		c.start();
+	}
 
 	public void clearUploads() {
 		this.channelUploads.clear();
@@ -70,22 +71,25 @@ public class YouTubeChannel implements Announcer, Runnable {
 	@Override
 	public void run() {
 		while (this.isRunning && !this.thread.isInterrupted()) {
-			if (youtube != null && !youtube.waitingToSync.isEmpty()) {
-				Iterator<YouTubeChannel> it = youtube.waitingToSync.iterator();
-				while (it.hasNext()) {
-					(it.next()).startIfNotRunning();
-					it.remove();
-				}
-			}
+			youtube.syncChannelsIfNotSyncing();
 			try {
-				update();
-				lastUpdate = System.currentTimeMillis();
-				Thread.sleep(Long.valueOf(engine.config.getProperty("youtubeUpdateDelay")));
+				if (shouldUpdate) {
+					update();
+					lastUpdate = System.currentTimeMillis();
+				}
+				else
+					this.shouldUpdate(true);
+				Thread.sleep((engine == null ? 600000 : Long.valueOf(engine.config.getProperty("youtubeUpdateDelay"))));
 			} 
 			catch (InterruptedException e) { }
 			catch (Exception e) {
-				engine.log("["+this.channelName+"] Cannot update!", "YouTube");
-				engine.logError(e, "YouTube");
+				if (engine == null) {
+					System.err.println("["+this.channelName+"] Cannot update!");
+					e.printStackTrace();
+				} else {
+					engine.log("["+this.channelName+"] Cannot update!", "YouTube");
+					engine.logError(e, "YouTube", this.channelName);
+				}
 			}
 		}
 		if (engine != null)
@@ -133,12 +137,18 @@ public class YouTubeChannel implements Announcer, Runnable {
 				saveCache();
 				announce(announce);
 			}
-
 		} catch (ParserConfigurationException | SAXException | IOException e) {
-			engine.log("Couldn't update YouTube uploads for user "+this.channelName);
-			engine.logError(e, "YouTube");
+			if (engine == null) {
+				System.err.println("Couldn't update YouTube uploads for user "+this.channelName);
+				e.printStackTrace();
+			}
+			else {
+				engine.log("Couldn't update YouTube uploads for user "+this.channelName);
+				engine.logError(e, "YouTube", this.channelName);
+			}
+			youtube.scheduleThreadRestart(this);
 		}
-		
+
 	}
 
 	public void saveCache() throws FileNotFoundException, IOException {
@@ -223,7 +233,7 @@ public class YouTubeChannel implements Announcer, Runnable {
 		this.isRunning = true;
 		(this.thread).start();
 	}
-	
+
 	public void stopIfRunning() {
 		if (this.isRunning)
 			stop();
@@ -234,16 +244,20 @@ public class YouTubeChannel implements Announcer, Runnable {
 			start();
 		}
 	}
-	
+
 	public void setSyncing(boolean b) {
 		this.isSyncing = b;
 	}
-	
+
 	public void removeCache() {
 		if (this.cacheFile.exists()) {
 			if (!this.cacheFile.delete())
 				this.cacheFile.deleteOnExit();
 		}
+	}
+	
+	public void shouldUpdate(boolean b) {
+		this.shouldUpdate = b;
 	}
 
 }

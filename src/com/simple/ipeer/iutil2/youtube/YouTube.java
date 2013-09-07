@@ -28,6 +28,7 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.AnnouncerHelper;
 import com.simple.ipeer.iutil2.engine.Main;
 
 public class YouTube implements AnnouncerHandler {
@@ -37,6 +38,9 @@ public class YouTube implements AnnouncerHandler {
 	public List<YouTubeChannel> waitingToSync = new ArrayList<YouTubeChannel>();
 	private boolean hasStarted = false;
 	private static YouTube youtubeInstance;
+	private boolean isSyncing = false;
+	@SuppressWarnings("unused")
+	private AnnouncerHelper announcerHelper;
 
 	public YouTube(Main engine) {
 		if (engine != null)
@@ -139,6 +143,10 @@ public class YouTube implements AnnouncerHandler {
 	}
 
 	public void startAll() {
+//		if (announcerHelper == null) {
+//			announcerHelper = new AnnouncerHelper(this, "YouTube", engine, 900000);
+//			announcerHelper.start();
+//		}
 		for (YouTubeChannel c : CHANNEL_LIST.values()) {
 			c.startIfNotRunning();
 		}
@@ -228,7 +236,10 @@ public class YouTube implements AnnouncerHandler {
 			dislikes = NumberFormat.getInstance().format(Integer.valueOf(li.getNamedItem("numDislikes").toString().replaceAll("numDislikes=|\"", "")));
 			likes = NumberFormat.getInstance().format(Integer.valueOf(li.getNamedItem("numLikes").toString().replaceAll("numLikes=|\"", "")));
 		} catch (NullPointerException e1) { }
-		String comments = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("gd:feedLink").item(0).getAttributes().getNamedItem("countHint").toString().replaceAll("countHint=|\"", "")));
+		String comments = "0";
+		try {
+			comments = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("gd:feedLink").item(0).getAttributes().getNamedItem("countHint").toString().replaceAll("countHint=|\"", "")));
+		} catch (NullPointerException e1) { }
 		String views = "0";
 		try {
 			views = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("yt:statistics").item(0).getAttributes().getNamedItem("viewCount").toString().replaceAll("viewCount=|\"", "")));
@@ -337,14 +348,37 @@ public class YouTube implements AnnouncerHandler {
 
 		try {
 			YouTube y = new YouTube(null);
-			LinkedList<YouTubeSearchResult> a = y.getSearchResults("ellie goulding burn");
-			for (YouTubeSearchResult b : a) {
-				System.err.println(b.toString());
+			HashMap<String, String> a = y.getVideoInfo("kMu9cAK2pwo");
+			for (String b : a.keySet()) {
+				System.err.println(b+": "+a.get(b));
 			}
 		} catch (Throwable e) {
 			e.printStackTrace();
 		}
 
+	}
+
+	public void syncChannelsIfNotSyncing() {
+		if (waitingToSync.isEmpty() && !isSyncing) {
+			isSyncing = true;
+			Iterator<YouTubeChannel> it = waitingToSync.iterator();
+			while (it.hasNext()) {
+				(it.next()).startIfNotRunning();
+				it.remove();
+			}
+			isSyncing = false;
+		}
+	}
+
+	@Override
+	public long getUpdateDelay() {
+		return (engine == null ? 600000 : Long.valueOf(engine.config.getProperty("youtubeUpdateDelay")));
+	}
+
+	@Override
+	public void scheduleThreadRestart(Object channel) {
+		((YouTubeChannel)channel).stop();
+		((YouTubeChannel)channel).startIfNotRunning();
 	}
 
 }

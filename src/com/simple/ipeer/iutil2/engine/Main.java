@@ -253,10 +253,19 @@ public class Main implements Runnable {
 	}
 	
 	public void logError(Throwable e, String type) {
+		logError(e, type, new String[0]);
+	}
+	
+	public void logError(Throwable e, String type, String... extraData) {
 		String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
 		//String out = time+" ["+type+"] "+;
 		List<String> out = new ArrayList<String>();
 		out.add("---- Caught "+type+" exception at "+time.toUpperCase()+" ----\n");
+		if (extraData.length > 0) {
+			int x = 0;
+			for (String a : extraData)
+				out.add("extraData["+x+++"]: "+a+"\n");
+		}
 		out.add(e.toString());
 		for (StackTraceElement a : e.getStackTrace())
 			out.add("        at "+a.toString());
@@ -270,7 +279,7 @@ public class Main implements Runnable {
 		} 
 		catch (IOException e1) {
 			System.err.println("Cannot write to log file!");
-			e1.printStackTrace(); // Probably the old error that should ever be printed like this (unless we're in debug mode, of course)
+			e1.printStackTrace(); // Probably the only error that should ever be printed like this (unless we're in debug mode, of course)
 		}
 
 	}

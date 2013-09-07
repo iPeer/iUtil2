@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Scanner;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.AnnouncerHelper;
 import com.simple.ipeer.iutil2.engine.Main;
 
 public class Twitch implements AnnouncerHandler {
@@ -20,6 +21,8 @@ public class Twitch implements AnnouncerHandler {
 	private HashMap<String, TwitchChannel> users;
 	public List<TwitchChannel> waitingToSync = new ArrayList<TwitchChannel>();
 	private boolean isSyncing = false;
+	@SuppressWarnings("unused")
+	private AnnouncerHelper announcerHelper;
 	
 	public Twitch (Main engine) {
 		engine.log("Twitch announcer is starting up.", "Twitch");
@@ -140,6 +143,10 @@ public class Twitch implements AnnouncerHandler {
 
 	@Override
 	public void startAll() {
+//		if (announcerHelper == null) {
+//			announcerHelper = new AnnouncerHelper(this, "Twitch", engine, 900000);
+//			announcerHelper.start();
+//		}
 		for (TwitchChannel c : this.users.values())
 			c.startIfNotRunning();
 	}
@@ -177,6 +184,17 @@ public class Twitch implements AnnouncerHandler {
 			}
 			isSyncing = false;
 		}
+	}
+
+	@Override
+	public long getUpdateDelay() {
+		return Long.valueOf((engine == null ? "600000" : engine.config.getProperty("twitchUpdateDelay")));
+	}
+
+	@Override
+	public void scheduleThreadRestart(Object channel) {
+		((TwitchChannel)channel).stop();
+		((TwitchChannel)channel).startIfNotRunning();
 	}
 
 }
