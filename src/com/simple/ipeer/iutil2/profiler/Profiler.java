@@ -22,8 +22,8 @@ public class Profiler {
 	private FileWriter profilerWriter;
 	private Main engine;
 
-	public Profiler() {
-		this.engine = Main.getMain();
+	public Profiler(Main engine) {
+		this.engine = engine;
 		if (engine != null) {
 			this.engine.log("Profiler is attempting to start...", "Profiler");
 			HashMap<String, String> defaultConfig = new HashMap<String, String>();
@@ -31,7 +31,7 @@ public class Profiler {
 			defaultConfig.put("profilerLogEnabled", "true");
 			this.engine.createConfigDefaults(defaultConfig);
 		}
-		if (this.engine == null ? true : this.engine.config.getProperty("profilerLogEnabled").equals("true")) {
+		if (engine == null || engine.config.getProperty("profilerLogEnabled").equals("true")) {
 			profilerLog = new File((engine == null ? "./logs/profiler.log" : this.engine.logDir+"/profiler.log"));
 			try {
 				profilerWriter = new FileWriter(profilerLog, true);

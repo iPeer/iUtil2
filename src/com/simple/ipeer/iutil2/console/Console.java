@@ -15,7 +15,7 @@ public class Console implements Runnable {
 	public Console(Main engine) {
 		this.engine = engine;
 		if (engine != null)
-			engine.log("Console instance is starting...", "Console");
+			engine.log("Waiting for connect to start console instance...", "Console");
 	}
 
 	public static void main(String[] args) {

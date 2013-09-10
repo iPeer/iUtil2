@@ -221,8 +221,10 @@ public class YouTubeChannel implements Announcer, Runnable {
 
 	@Override
 	public void stop() {
-		this.isRunning = false;
-		(this.thread).interrupt();
+	    if (engine != null)
+		engine.log("YouTube Announcer Thread "+this.channelName+" is stopping", "YouTube");
+	    this.isRunning = false;
+	    (this.thread).interrupt();
 	}
 
 	@Override

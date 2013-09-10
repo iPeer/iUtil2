@@ -70,7 +70,12 @@ public class Protocol {
 	}
 	
 	else if (line.split(" ")[1].equals("004")) {
-	    engine.send(engine.config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(engine.readPassword())), false /* We have to remember not to log this line because passwords. */);
+	    try {
+		engine.send(engine.config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(engine.readPassword())), false /* We have to remember not to log this line because passwords. */);
+	    }
+	    catch (RuntimeException e) { 
+		engine.log("Cannot authenticate with server: "+e.getMessage());
+	    }
 	    engine.send("MODE "+engine.getIAL().getCurrentNick()+" "+engine.config.getProperty("connectModes"));
 	}
 	

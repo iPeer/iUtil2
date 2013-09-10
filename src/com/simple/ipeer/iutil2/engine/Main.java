@@ -31,20 +31,20 @@ import javax.net.ssl.SSLSocketFactory;
 
 import com.simple.ipeer.iutil2.console.Console;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
-import com.simple.ipeer.iutil2.irc.Server;
 import com.simple.ipeer.iutil2.irc.ial.IAL;
 import com.simple.ipeer.iutil2.irc.protocol.Protocol;
+import com.simple.ipeer.iutil2.minecraft.AWeSomeStatus;
 import com.simple.ipeer.iutil2.profiler.Profiler;
 import com.simple.ipeer.iutil2.tell.Tell;
 import com.simple.ipeer.iutil2.twitch.Twitch;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 
-public class Main implements Runnable {
+public final class Main implements Runnable {
     
-    public final String BOT_VERSION = "0.217";
+    public final String BOT_VERSION = "0.345";
     
     private static final File DEFAULT_CONFIG_DIR = new File("./config");
-    private static final Server DEFAULT_SERVER = new Server("127.0.0.1", false, 6667);
+    //private static final Server DEFAULT_SERVER = new Server("127.0.0.1", false, 6667);
     private static final String DEFAULT_NICK = "iUtil";
     private static final File DEFAULT_LOGS_DIR = new File("./logs");
     
@@ -57,7 +57,7 @@ public class Main implements Runnable {
     public static final char DASH = 8212;
     
     public Properties config = new Properties();
-    public Server server = DEFAULT_SERVER;
+    //public Server server = DEFAULT_SERVER;
     public File configDir;
     public File configFile;
     public File logDir;
@@ -156,13 +156,13 @@ public class Main implements Runnable {
 	
 	// Now we change the config should anything differ in the command line.
 	
-	if (args.containsKey("server") && config.getProperty("server") != args.get("server"))
+	if (args.containsKey("server") && !config.getProperty("server").equals(args.get("server")))
 	    config.put("server", args.get("server"));
 	
-	if (args.containsKey("port") && config.getProperty("port") != args.get("port"))
+	if (args.containsKey("port") && !config.getProperty("port").equals(args.get("port")))
 	    config.put("port", args.get("port"));
 	
-	if (args.containsKey("ssl") && config.getProperty("ssl") != args.get("ssl"))
+	if (args.containsKey("ssl") && !config.getProperty("ssl").equals(args.get("ssl")))
 	    config.put("ssl", args.get("ssl"));
 	if (args.containsKey("debug"))
 	    config.put("debug", args.get("debug"));
@@ -186,16 +186,20 @@ public class Main implements Runnable {
 	defaultConfig.put("reconnectDelay", "5000");
 	defaultConfig.put("debugChannel", "#peer.dev");
 	defaultConfig.put("profilingEnabled", "true");
+	defaultConfig.put("apiDataDir", "./api");
 	createConfigDefaults(defaultConfig);
+	
+	new File(config.getProperty("apiDataDir")).mkdirs();
 	
 	// Announcers and other threads that should run while the bot is
 	
 	announcers = new HashMap<String, AnnouncerHandler>();
 	announcers.put("YouTube", new YouTube(this));
 	announcers.put("Twitch", new Twitch(this));
+	announcers.put("AWeSome Status", new AWeSomeStatus(this));
 	tell = new Tell(this);
 	console = new Console(this);
-	profiler = new Profiler();
+	profiler = new Profiler(this);
 	ial = new IAL(this);
 	
 	// Now everything should be okay and we can start the bot...
@@ -268,21 +272,21 @@ public class Main implements Runnable {
     public void logError(Throwable e, String type, String... extraData) {
 	String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
 	//String out = time+" ["+type+"] "+;
-	List<String> out = new ArrayList<String>();
-	out.add("---- Caught "+type+" exception at "+time.toUpperCase()+" ----\n");
+	List<String> outLines = new ArrayList<String>();
+	outLines.add("---- Caught "+type+" exception at "+time.toUpperCase()+" ----\n");
 	if (extraData.length > 0) {
 	    int x = 0;
 	    for (String a : extraData)
-		out.add("extraData["+x+++"]: "+a+"\n");
+		outLines.add("extraData["+x+++"]: "+a+"\n");
 	}
-	out.add(e.toString());
+	outLines.add(e.toString());
 	for (StackTraceElement a : e.getStackTrace())
-	    out.add("        at "+a.toString());
-	out.add("\n---- End of stack trace ----\n\n");
+	    outLines.add("        at "+a.toString());
+	outLines.add("\n---- End of stack trace ----\n\n");
 	if (config.containsKey("debug") && config.getProperty("debug").equals("true"))
 	    e.printStackTrace();
 	try {
-	    for (String a : out)
+	    for (String a : outLines)
 		errorWriter.write(a+"\r\n");
 	    errorWriter.flush();
 	}
@@ -300,9 +304,9 @@ public class Main implements Runnable {
 	if (!configFile.exists()) {
 	    log("Config file not found, creating default settings...");
 	    // Basic, default settings
-	    config.put("server", DEFAULT_SERVER.getAddress());
-	    config.put("port", Integer.toString(DEFAULT_SERVER.getPort()));
-	    config.put("ssl", Boolean.toString(DEFAULT_SERVER.isSSL()));
+	    config.put("server", "127.0.0.1");
+	    config.put("port", 6667);
+	    config.put("ssl", false);
 	    saveConfig();
 	}
 	else {
@@ -418,7 +422,15 @@ public class Main implements Runnable {
 		while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
 		    getProfiler().startSection("Incoming");
 		    addReceivedBytes(line.getBytes().length);
-		    protocol.parse(line, this);
+		    try {
+			protocol.parse(line, this);
+		    }
+		    catch (Throwable e) {
+			log("Encountered a fatal error!");
+			logError(e, "General", line);
+			if (isConnected())
+			    send("QUIT :FATAL: "+e.toString()+" at "+e.getStackTrace()[0]);
+		    }
 		    try { getProfiler().end(); } catch (Exception e) { }
 		}
 		
@@ -540,8 +552,8 @@ public class Main implements Runnable {
 	    return new String(aes.doFinal(pass)).toCharArray();
 	} catch (Exception e) {
 	    log("Couldn't read password from file!");
-	    logError(e);
-	    return new char[0];
+	    //logError(e);
+	    throw new RuntimeException(e.toString());
 	}
     }
     
