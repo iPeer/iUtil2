@@ -33,6 +33,7 @@ import com.simple.ipeer.iutil2.console.Console;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
 import com.simple.ipeer.iutil2.irc.ial.IAL;
 import com.simple.ipeer.iutil2.irc.protocol.Protocol;
+import com.simple.ipeer.iutil2.minecraft.AWeSomeChat;
 import com.simple.ipeer.iutil2.minecraft.AWeSomeStatus;
 import com.simple.ipeer.iutil2.profiler.Profiler;
 import com.simple.ipeer.iutil2.tell.Tell;
@@ -57,7 +58,6 @@ public final class Main implements Runnable {
     public static final char DASH = 8212;
     
     public Properties config = new Properties();
-    //public Server server = DEFAULT_SERVER;
     public File configDir;
     public File configFile;
     public File logDir;
@@ -72,7 +72,6 @@ public final class Main implements Runnable {
     public HashMap<String, AnnouncerHandler> announcers;
     
     private Thread engineThread;
-    //private Main engine;
     private boolean engineRunning = false;
     
     private Socket connection;
@@ -197,6 +196,7 @@ public final class Main implements Runnable {
 	announcers.put("YouTube", new YouTube(this));
 	announcers.put("Twitch", new Twitch(this));
 	announcers.put("AWeSome Status", new AWeSomeStatus(this));
+	announcers.put("AWeSome Chat", new AWeSomeChat(this));
 	tell = new Tell(this);
 	console = new Console(this);
 	profiler = new Profiler(this);

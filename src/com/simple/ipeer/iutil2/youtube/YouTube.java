@@ -28,7 +28,6 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
-import com.simple.ipeer.iutil2.engine.AnnouncerHelper;
 import com.simple.ipeer.iutil2.engine.Main;
 
 public class YouTube implements AnnouncerHandler {
@@ -39,9 +38,6 @@ public class YouTube implements AnnouncerHandler {
 	private boolean hasStarted = false;
 	private static YouTube youtubeInstance;
 	private boolean isSyncing = false;
-	@SuppressWarnings("unused")
-	private AnnouncerHelper announcerHelper;
-
 	public YouTube(Main engine) {
 		if (engine != null)
 			engine.log("YouTube announcer is starting up.", "YouTube");

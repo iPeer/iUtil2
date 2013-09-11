@@ -526,7 +526,7 @@ public class Protocol {
 	else if (line.split(" ")[1].equals("MODE")) {
 	    engine.getProfiler().start("Modes");
 	    String[] data = line.split(" ");
-	    if (data.length > 3 && engine.NETWORK_SETTINGS.get("CHANTYPES").contains(data[2].substring(0, 1)))
+	    if (data.length > 3 && engine.NETWORK_SETTINGS.get("CHANTYPES").contains(data[2].substring(0, 1)) && data[0].contains("!"))
 		try {
 		    engine.getIAL().updateAddressIfNeeded(data[2], data[0].substring(1).split("!")[0], data[0].substring(1).split("!")[1]);
 		} catch (ArrayIndexOutOfBoundsException e) {

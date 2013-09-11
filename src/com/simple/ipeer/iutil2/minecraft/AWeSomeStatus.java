@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package com.simple.ipeer.iutil2.minecraft;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;

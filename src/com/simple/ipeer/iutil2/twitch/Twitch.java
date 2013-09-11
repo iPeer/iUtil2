@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Scanner;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
-import com.simple.ipeer.iutil2.engine.AnnouncerHelper;
 import com.simple.ipeer.iutil2.engine.Main;
 
 public class Twitch implements AnnouncerHandler {
@@ -21,8 +20,6 @@ public class Twitch implements AnnouncerHandler {
 	private HashMap<String, TwitchChannel> users;
 	public List<TwitchChannel> waitingToSync = new ArrayList<TwitchChannel>();
 	private boolean isSyncing = false;
-	@SuppressWarnings("unused")
-	private AnnouncerHelper announcerHelper;
 	
 	public Twitch (Main engine) {
 		engine.log("Twitch announcer is starting up.", "Twitch");
