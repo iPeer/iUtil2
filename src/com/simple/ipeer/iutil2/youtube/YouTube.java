@@ -355,7 +355,7 @@ public class YouTube implements AnnouncerHandler {
 	}
 
 	public void syncChannelsIfNotSyncing() {
-		if (waitingToSync.isEmpty() && !isSyncing) {
+		if (!waitingToSync.isEmpty() && !isSyncing) {
 			isSyncing = true;
 			Iterator<YouTubeChannel> it = waitingToSync.iterator();
 			while (it.hasNext()) {
