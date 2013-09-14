@@ -31,6 +31,9 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
     public MinecraftServiceStatus(Main engine) {
 	this.engine = engine;
 	
+	if (engine != null)
+	    engine.log("Minecraft Service Status Checker is preparing to start.", "MinecraftServiceStatus");
+	
 	statusData = new HashMap<String, HashMap<String, String>>();
 	
 	HashMap<String, String> s = new HashMap<String, String>();
@@ -42,7 +45,7 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	if (engine != null)
 	    engine.createConfigDefaults(s);
 	
-	File a = new File("/Minecraft");
+	File a = new File("./Minecraft");
 	if (!a.exists())
 	    a.mkdirs();
 	
@@ -56,17 +59,17 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	services.put("Session", new MinecraftService("https://session.minecraft.net/game/checkserver.jsp"));
 	
     }
-
+    
     @Override
     public boolean addUser(String name) {
 	return false;
     }
-
+    
     @Override
     public boolean removeUser(String name) {
 	return false;
     }
-
+    
     @Override
     public void updateAll() {
 	String line = "";
@@ -87,33 +90,53 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	} catch (IOException iOException) {
 	}
     }
-
+    
+    public void stop() {
+	this.isRunning = false;
+	thread.interrupt();
+	if (engine != null)
+	    engine.log("Minecraft Service Status Checker is stopping.", "MinecraftServiceStatus");
+    }
+    
+    public void start() {
+	this.isRunning = true;
+	(thread = new Thread(this, "Minecraft Service Status Checker")).start();
+	if (engine != null)
+	    engine.log("Minecraft Service Status Checker is starting.", "MinecraftServiceStatus");
+    }
+    
+    public void startIfNotRunning() {
+	if (!this.isRunning)
+	    start();
+    }
+    
     @Override
     public void startAll() {
+	startIfNotRunning();
     }
-
+    
     @Override
     public void stopAll() {
     }
-
+    
     @Override
     public void update(String name) {
     }
-
+    
     @Override
     public long timeTilUpdate() {
 	return (lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
     }
-
+    
     @Override
     public long getUpdateDelay() {
 	return (engine == null ? 600000 : Long.valueOf(engine.config.getProperty("mcssUpdateDelay")));
     }
-
+    
     @Override
     public void scheduleThreadRestart(Object channel) {
     }
-
+    
     @Override
     public void run() {
 	while (isRunning && !thread.isInterrupted()) {
@@ -135,5 +158,5 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
     public HashMap<String, HashMap<String, String>> getStatusData() {
 	return this.statusData;
     }
-
+    
 }

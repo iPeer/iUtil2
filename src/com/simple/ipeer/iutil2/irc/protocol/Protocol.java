@@ -15,9 +15,11 @@ import org.xml.sax.SAXException;
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.ial.User;
+import com.simple.ipeer.iutil2.minecraft.servicestatus.MinecraftServiceStatus;
 import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 import com.simple.ipeer.iutil2.youtube.YouTubeSearchResult;
+import java.util.Iterator;
 
 public class Protocol {
     
@@ -407,10 +409,26 @@ public class Protocol {
 		    }
 		}
 		
+		else if (commandName.matches("m(ine)?c(raft)?(services?)?status")) {
+		    MinecraftServiceStatus mcss = (MinecraftServiceStatus)engine.getAnnouncers().get("Minecraft Service Status");
+		    String out = "";
+		    HashMap<String, HashMap<String, String>> statusData = mcss.getStatusData();
+		    for (Iterator<String> it = statusData.keySet().iterator(); it.hasNext();) {
+			String key = it.next();
+			String ping = statusData.get(key).get("ping");
+			String status = statusData.get(key).get("status");
+			String errorMessage = "";
+			if (statusData.get(key).containsKey("errorMessage"))
+			    errorMessage = statusData.get(key).get("errorMessage");
+			String colourPrefix = (!errorMessage.equals("") || !status.equals("200") ? "%K04%" : (Integer.valueOf(ping) > 1500 ? "%K08%" : "%K03%"));
+			out += (out.length() > 0 ? "%C1%, " : "")+colourPrefix+key+" ("+(errorMessage.equals("") ? ping+"ms" : errorMessage)+")";
+		    }
+		    engine.send(sendPrefix+" :"+out);
+		}
+		
 		else if (commandName.matches("y(ou)?t(ube)?(search)?")) {
 		    engine.getProfiler().start("YTSearch");
 		    try {
-			System.err.println(message.substring(commandName.length() + 2));
 			String query = message.substring(commandName.length() + 2);
 			List<YouTubeSearchResult> results = (engine == null ? new YouTube(null) : (YouTube)engine.getAnnouncers().get("YouTube")).getSearchResults(query);
 			int result = 0;
@@ -432,7 +450,7 @@ public class Protocol {
 				engine.send(sendPrefix+" :"+engine.config.getProperty("youtubeInfoFormatDescription").replaceAll("%DESCRIPTION%", r.getDescription()));
 			}
 		    }
-		    catch (ArrayIndexOutOfBoundsException e) {
+		    catch (StringIndexOutOfBoundsException e) {
 			engine.send(sendPrefix+" :You must provide a search query!");
 			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <query>");
 		    }

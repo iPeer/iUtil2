@@ -99,7 +99,6 @@ public class MinecraftService implements IMinecraftService {
 
     @Override
     public String getAddress() {
-	System.err.println(this.url);
 	return this.url.split("/")[2];
     }
     

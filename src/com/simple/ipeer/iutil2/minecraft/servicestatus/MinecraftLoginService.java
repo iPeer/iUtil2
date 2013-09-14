@@ -65,7 +65,10 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
 	    BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
 	    line = in.readLine();
 	    //System.err.println(line);
-	    this.mcss.setSSID(line.split(":")[3]); // Not actually used right now
+	    if (line.contains(":"))
+		this.mcss.setSSID(line.split(":")[3]); // Not actually used right now
+	    else
+		data.put("errorMessage", "Server gave an invalid response: "+line);
 	    in.close();
 	    wr.close();
 	    data.put("status", Integer.toString(con.getResponseCode()));
