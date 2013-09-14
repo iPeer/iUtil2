@@ -35,10 +35,13 @@ import com.simple.ipeer.iutil2.irc.ial.IAL;
 import com.simple.ipeer.iutil2.irc.protocol.Protocol;
 import com.simple.ipeer.iutil2.minecraft.AWeSomeChat;
 import com.simple.ipeer.iutil2.minecraft.AWeSomeStatus;
+import com.simple.ipeer.iutil2.minecraft.servicestatus.MinecraftServiceStatus;
 import com.simple.ipeer.iutil2.profiler.Profiler;
 import com.simple.ipeer.iutil2.tell.Tell;
 import com.simple.ipeer.iutil2.twitch.Twitch;
 import com.simple.ipeer.iutil2.youtube.YouTube;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class Main implements Runnable {
     
@@ -197,6 +200,7 @@ public final class Main implements Runnable {
 	announcers.put("Twitch", new Twitch(this));
 	announcers.put("AWeSome Status", new AWeSomeStatus(this));
 	announcers.put("AWeSome Chat", new AWeSomeChat(this));
+	announcers.put("Minecraft Service Status", new MinecraftServiceStatus(this));
 	tell = new Tell(this);
 	console = new Console(this);
 	profiler = new Profiler(this);
@@ -496,7 +500,7 @@ public final class Main implements Runnable {
 	    
 	    if (!(data.endsWith("\r\n") || data.endsWith("\n\r")))
 		data = data+"\r\n";
-	    if (this.textFormatting)
+	    if (this.textFormatting) {
 		data = data
 			.replaceAll("%C1%", Main.COLOUR+(String.format("%02d", Integer.valueOf(config.getProperty("colour1")))))
 			.replaceAll("%C2%", Main.COLOUR+(String.format("%02d", Integer.valueOf(config.getProperty("colour2")))))
@@ -507,6 +511,15 @@ public final class Main implements Runnable {
 			.replaceAll("%[HR]%", String.valueOf(Main.HIGHLIGHT))
 			.replaceAll("%E%", String.valueOf(Main.ENDALL))
 			.replaceAll("%DASH%", String.valueOf(Main.DASH));
+		Matcher s = Pattern.compile("%K[0-9]{1,2}(,[0-9]{1,2})?%").matcher(data); // Custom colours, yay
+		while (s.find()) {
+		    String colours = s.group().split("%K|%")[1];
+		    for (String a : colours.split(","))
+			if (a.length() == 1)
+			    colours = colours.replaceAll(a, String.format("%02d", Integer.valueOf(a)));
+		    data = data.replaceAll(s.group(), Main.COLOUR+colours);
+		}
+	    }
 	    addSentBytes(data.getBytes().length);
 	    out.write(data);
 	    out.flush();
