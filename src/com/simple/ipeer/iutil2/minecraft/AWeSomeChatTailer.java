@@ -241,7 +241,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 	    }
 	    
 	    if (logLines.isEmpty())
-		writeToLog(line.replaceAll(" \\[INFO\\]", ""));
+		if (!(line.contains("Stopping the server") || line.contains("For help, type \"help\" or \"?\"")))
+		    writeToLog(line.replaceAll(" \\[INFO\\]", ""));
 	    else
 		for (Iterator<String> it = logLines.iterator(); it.hasNext();)
 		    writeToLog(it.next());
