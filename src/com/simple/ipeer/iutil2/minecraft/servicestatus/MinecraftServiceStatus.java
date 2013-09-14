@@ -38,7 +38,7 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	
 	HashMap<String, String> s = new HashMap<String, String>();
 	s.put("mcssAnnounceFailures", "false");
-	s.put("mcssUpdateDelay", "600000");
+	s.put("mcssUpdateDelay", "60000");
 	s.put("mcssFailureFormat", "%C1%[%C2%Minecraft Status%C1%] %C2%%SERVICE%%C1% is reporting downtime!");
 	s.put("mcssBackOnlineFormat", "%C1%[%C2%Minecraft Status%C1%] %C2%%SERVICE%%C1% is back online!");
 	
@@ -130,7 +130,7 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
     
     @Override
     public long getUpdateDelay() {
-	return (engine == null ? 600000 : Long.valueOf(engine.config.getProperty("mcssUpdateDelay")));
+	return (engine == null ? 60000 : Long.valueOf(engine.config.getProperty("mcssUpdateDelay")));
     }
     
     @Override
@@ -141,6 +141,7 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
     public void run() {
 	while (isRunning && !thread.isInterrupted()) {
 	    updateAll();
+	    lastUpdate = System.currentTimeMillis();
 	    try {
 		Thread.sleep(getUpdateDelay());
 	    } catch (InterruptedException ex) {

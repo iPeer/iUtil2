@@ -29,6 +29,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
     private Main engine;
     private String serverName = "";
     
+    public long lastUpdate = 0L;
+    
     private boolean isRunning = false;
     private Thread thread;
     
@@ -120,6 +122,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 			saveCache = false;
 			cache.store(new FileOutputStream(markerFile), "");
 		    }
+		    lastUpdate = System.currentTimeMillis();
 		    Thread.sleep((engine == null ? 500 : Long.valueOf(engine.config.getProperty("ascUpdateDelay"))));
 		}
 	    }

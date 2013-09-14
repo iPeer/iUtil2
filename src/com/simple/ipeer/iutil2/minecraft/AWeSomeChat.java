@@ -68,12 +68,12 @@ public class AWeSomeChat implements AnnouncerHandler {
     
     @Override
     public long timeTilUpdate() {
-	return 0L;
+	return (((AWeSomeChatTailer)this.tailers.iterator().next()).lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
     }
     
     @Override
     public long getUpdateDelay() {
-	return 0L;
+	return (engine == null ? 500 : Long.valueOf(engine.config.getProperty("ascUpdateDelay")));
     }
     
     @Override
