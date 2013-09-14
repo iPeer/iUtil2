@@ -18,7 +18,6 @@ import com.simple.ipeer.iutil2.irc.ial.User;
 import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 import com.simple.ipeer.iutil2.youtube.YouTubeSearchResult;
-import java.io.FileNotFoundException;
 
 public class Protocol {
     
@@ -37,7 +36,7 @@ public class Protocol {
 	p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev ::D", null);
     }
     
-    public void parse(String line, Main engine) {
+    public void parse(String line, final Main engine) {
 	// We log the whole line for debug purposes
 	if (engine != null && (!line.startsWith("PING ")/* && engine.config.getProperty("debug").equals("true")*/))
 	    engine.log("<- "+line, "IRC");
@@ -174,16 +173,29 @@ public class Protocol {
 		}
 		
 		else if (commandName.matches("force(y(ou)?t(ube)?)?update") && isAdmin) {
-		    long start = System.currentTimeMillis();
-		    engine.send(sendPrefix+" :Updating all YouTube threads...");
-		    engine.getAnnouncers().get("YouTube").updateAll();
-		    engine.send(sendPrefix+" :Finished updating all YouTube threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
+		    final String fSendPrefix = sendPrefix;
+		    new Thread(
+			    new Runnable() {
+				public void run() {
+				    engine.send(fSendPrefix+" :Updating all YouTube threads...");
+				    long start = System.currentTimeMillis();
+				    engine.getAnnouncers().get("YouTube").updateAll();
+				    engine.send(fSendPrefix+" :Finished updating all YouTube threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
+				}
+			    }).start();
 		}
+		
 		else if (commandName.equals("forcetwitchupdate") && isAdmin) {
-		    long start = System.currentTimeMillis();
-		    engine.send(sendPrefix+" :Updating all Twitch threads...");
-		    engine.getAnnouncers().get("Twitch").updateAll();
-		    engine.send(sendPrefix+" :Finished updating all Twitch threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
+		    final String fSendPrefix = sendPrefix;
+		    new Thread(
+			    new Runnable() {
+				public void run() {
+				    engine.send(fSendPrefix+" :Updating all Twitch threads...");
+				    long start = System.currentTimeMillis();
+				    engine.getAnnouncers().get("Twitch").updateAll();
+				    engine.send(fSendPrefix+" :Finished updating all Twitch threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
+				}
+			    }).start();
 		}
 		
 		else if (commandName.equals("profiler")) {
