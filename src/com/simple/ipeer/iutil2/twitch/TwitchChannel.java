@@ -101,7 +101,7 @@ public class TwitchChannel implements Announcer, Runnable {
 		streamData.add(0, streamID);
 		streamData.add(1, streamDesc);
 		streamData.add(2, streamQuality);
-		streamData.add(3, gameName);
+		streamData.add(3, gameName.replaceAll("&#39;", "'"));
 	    }
 	    announce(streamData);
 	}
