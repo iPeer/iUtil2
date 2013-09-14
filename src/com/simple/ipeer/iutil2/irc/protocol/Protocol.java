@@ -138,7 +138,7 @@ public class Protocol {
 	    if (engine != null && channel.equals(engine.getIAL().getCurrentNick()))
 		channel = nick;
 	    
-	    String message = line.split(" :")[1];
+	    String message = line.substring((line.indexOf(" :") + 2), line.length());
 	    
 	    // CTCPs
 	    
