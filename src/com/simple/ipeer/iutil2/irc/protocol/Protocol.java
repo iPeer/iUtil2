@@ -410,7 +410,8 @@ public class Protocol {
 		else if (commandName.matches("y(ou)?t(ube)?(search)?")) {
 		    engine.getProfiler().start("YTSearch");
 		    try {
-			String query = message.split(commandName+" ")[1];
+			System.err.println(message.substring(commandName.length() + 2));
+			String query = message.substring(commandName.length() + 2);
 			List<YouTubeSearchResult> results = (engine == null ? new YouTube(null) : (YouTube)engine.getAnnouncers().get("YouTube")).getSearchResults(query);
 			int result = 0;
 			for (YouTubeSearchResult r : results) {
