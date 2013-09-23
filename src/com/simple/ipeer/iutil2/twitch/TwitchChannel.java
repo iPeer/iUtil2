@@ -37,11 +37,11 @@ public class TwitchChannel implements Announcer, Runnable {
     }
     
     
-    //	public static void main(String[] args) {
-    //		TwitchChannel a = new TwitchChannel("Inker19", null, null);
-    //		a.removeCache();
-    //		a.update();
-    //	}
+//    	public static void main(String[] args) {
+//    		TwitchChannel a = new TwitchChannel("Pakratt0013", null, null);
+//    		a.removeCache();
+//    		a.update();
+//    	}
     
     @Override
     public void run() {
@@ -99,7 +99,7 @@ public class TwitchChannel implements Announcer, Runnable {
 		catch (NullPointerException e) { }
 		//data.item(27).getFirstChild().getNodeValue();
 		streamData.add(0, streamID);
-		streamData.add(1, streamDesc);
+		streamData.add(1, streamDesc.replaceAll("&#39;", "'").replaceAll("[\\n\\r]", " "));
 		streamData.add(2, streamQuality);
 		streamData.add(3, gameName.replaceAll("&#39;", "'"));
 	    }
