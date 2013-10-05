@@ -17,5 +17,8 @@ public interface IAWeSomeChatTailer {
     public void start();
     public void startIfNotRunning();
     public void stop();
+    public long getUpdateDelay();
+    public long timeTilUpdate();
+    public boolean isDead();
     
 }

@@ -11,5 +11,7 @@ public interface AnnouncerHandler {
 	public long timeTilUpdate();
 	public long getUpdateDelay();
 	public void scheduleThreadRestart(Object channel);
+	public int getDeadThreads();
+	public int getTotalThreads();
 	
 }

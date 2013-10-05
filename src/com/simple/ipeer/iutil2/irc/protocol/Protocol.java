@@ -19,7 +19,11 @@ import com.simple.ipeer.iutil2.minecraft.servicestatus.MinecraftServiceStatus;
 import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 import com.simple.ipeer.iutil2.youtube.YouTubeSearchResult;
+import java.io.File;
+import java.io.FileWriter;
 import java.util.Iterator;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Protocol {
     
@@ -74,7 +78,7 @@ public class Protocol {
 	    try {
 		engine.send(engine.config.getProperty("identificationString").replaceAll("%PASSWORD%", new String(engine.readPassword())), false /* We have to remember not to log this line because passwords. */);
 	    }
-	    catch (RuntimeException e) { 
+	    catch (RuntimeException e) {
 		engine.log("Cannot authenticate with server: "+e.getMessage());
 	    }
 	    engine.send("MODE "+engine.getIAL().getCurrentNick()+" "+engine.config.getProperty("connectModes"));
@@ -256,14 +260,15 @@ public class Protocol {
 		    String threads = "";
 		    for (String a : engine.getAnnouncers().keySet()) {
 			AnnouncerHandler ah = engine.getAnnouncers().get(a);
+			int deadThreads = ah.getDeadThreads();
 			int ttu = (int)(ah.timeTilUpdate() / 1000L);
 			int seconds = ttu % 60;
-			int minutes = ttu / 60;
+			int minutes = (int)ttu / 60;
 			int hours = (int)(Math.floor(minutes / 60));
 			if (hours > 0)
 			    minutes -= hours*60;
 			String time = (hours > 0 ? String.format("%02d", hours)+":" : "")+String.format("%02d", minutes)+":"+String.format("%02d", seconds);
-			threads = threads+(threads.length() > 0 ? ", " : "")+a+": "+time;
+			threads = threads+(threads.length() > 0 ? ", " : "")+a+": "+time+" ("+deadThreads+" of "+ah.getTotalThreads()+" dead)";
 		    }
 		    out.add("Announcers (updating in): "+threads);
 		    out.add("Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+", C: "+System.getProperty("java.class.version")+" VM: "+System.getProperty("java.vm.version")+" / "+System.getProperty("java.vm.specification.version"));
@@ -476,6 +481,20 @@ public class Protocol {
 		    engine.send(sendPrefix+" :I am "+engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getFullAddress()+"."+(engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getModes().equals("") ? "" : " I have modes +"+engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getModes()));
 		}
 		
+		else if (commandName.equalsIgnoreCase("listthreads") && isAdmin) {
+		    ThreadGroup root = Thread.currentThread().getThreadGroup();
+		    ThreadGroup parent = root.getParent();
+		    File out = new File("./logs/threadlist-"+System.currentTimeMillis()+".txt");
+		    //FileWriter fw = null;
+		    try (FileWriter fw = new FileWriter(out)) {
+			listThreads(parent, "", fw);
+			fw.close();
+			engine.send(sendPrefix+" :Thread list dumped to "+out.getAbsoluteFile());
+		    } catch (IOException ex) {
+			engine.send(sendPrefix+" :Couldn't create thread list: "+ex.toString()+" @ "+ex.getStackTrace()[0]);
+		    }
+		}
+		
 		engine.getProfiler().end();
 	    }
 	    
@@ -650,6 +669,30 @@ public class Protocol {
 	
 	if (engine != null)
 	    engine.getProfiler().end();
+	
+    }
+    
+    private void listThreads(ThreadGroup parent, String i, FileWriter fw) throws IOException {
+	try {
+	    fw.write(i + "Group[" + parent.getName() + ":" + parent.getClass()+"]\n");
+	    int a = parent.activeCount();
+	    Thread[] b = new Thread[a*2 + 10];
+	    a = parent.enumerate(b, false);
+	    
+	    for (int x = 0; x < a; x++) {
+		Thread t = b[x];
+		fw.write(i+" Thread["+t.getName()+" : "+t.getClass()+"]\n");
+	    }
+	    
+	    int c = parent.activeGroupCount();
+	    ThreadGroup[] g = new ThreadGroup[c*2 + 10];
+	    c = parent.enumerate(g, false);
+	    
+	    for (int x = 0; x < 5; x++) {
+		listThreads(g[x], i+" ", fw);
+	    }
+	}
+	catch (NullPointerException e) { }
 	
     }
     

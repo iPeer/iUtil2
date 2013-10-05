@@ -17,6 +17,8 @@ import org.w3c.dom.NodeList;
 
 import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.Main;
+import javax.xml.parsers.ParserConfigurationException;
+import org.xml.sax.SAXException;
 
 public class TwitchChannel implements Announcer, Runnable {
     
@@ -37,18 +39,25 @@ public class TwitchChannel implements Announcer, Runnable {
     }
     
     
-//    	public static void main(String[] args) {
-//    		TwitchChannel a = new TwitchChannel("Pakratt0013", null, null);
-//    		a.removeCache();
-//    		a.update();
-//    	}
+    //    	public static void main(String[] args) {
+    //    		TwitchChannel a = new TwitchChannel("Pakratt0013", null, null);
+    //    		a.removeCache();
+    //    		a.update();
+    //    	}
     
     @Override
     public void run() {
 	while (this.isRunning && !this.thread.isInterrupted()) {
 	    twitch.syncChannelsIfNotSyncing();
 	    if (shouldUpdate) {
-		update();
+		try {
+		    update();
+		} catch (Throwable e) {
+		    if (engine != null) {
+			engine.log("There was a problem while updating Twitch user "+this.channelName);
+			engine.logError(e, "Twitch", this.channelName);
+		    }
+		}
 		lastUpdate = System.currentTimeMillis();
 	    }
 	    else
@@ -69,49 +78,40 @@ public class TwitchChannel implements Announcer, Runnable {
     }
     
     @Override
-    public void update() {
-	try {
-	    List<String> streamData = new LinkedList<String>();
-	    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-	    DocumentBuilder a;
-	    a = f.newDocumentBuilder();
-	    Document doc = a.newDocument();
-	    doc = a.parse("https://api.justin.tv/api/stream/list.xml?channel="+this.channelName);
-	    doc.getDocumentElement().normalize();
-	    
-	    NodeList data = doc.getDocumentElement().getElementsByTagName("stream");
-	    if (data.getLength() > 0) {
-		String gameName = "", streamDesc = "", streamQuality = "", streamID = "";
-		data = data.item(0).getChildNodes();
-		streamID = ((Element)data).getElementsByTagName("id").item(0).getFirstChild().getNodeValue();
-		//data.item(11).getFirstChild().getNodeValue();
-		// The Stream title changes place (doesn't that defeat the point of an API?), so we have to do it this way...
-		try {
-		    streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue().trim();
-		}
-		catch (NullPointerException e) { }
-		// Seems the quality can sometimes be contaminated by the title of the stream.
-		streamQuality = ((Element)data).getElementsByTagName("video_height").item(0).getFirstChild().getNodeValue();
-		//data.item(17).getFirstChild().getNodeValue();
-		try {
-		    gameName = ((Element)data).getElementsByTagName("meta_game").item(0).getFirstChild().getNodeValue();
-		}
-		catch (NullPointerException e) { }
-		//data.item(27).getFirstChild().getNodeValue();
-		streamData.add(0, streamID);
-		streamData.add(1, streamDesc.replaceAll("&#39;", "'").replaceAll("[\\n\\r]", " "));
-		streamData.add(2, streamQuality);
-		streamData.add(3, gameName.replaceAll("&#39;", "'"));
+    public void update() throws IOException, SAXException, ParserConfigurationException {
+	List<String> streamData = new LinkedList<String>();
+	DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+	DocumentBuilder a;
+	a = f.newDocumentBuilder();
+	Document doc = a.newDocument();
+	doc = a.parse("https://api.justin.tv/api/stream/list.xml?channel="+this.channelName);
+	doc.getDocumentElement().normalize();
+	
+	NodeList data = doc.getDocumentElement().getElementsByTagName("stream");
+	if (data.getLength() > 0) {
+	    String gameName = "", streamDesc = "", streamQuality = "", streamID = "";
+	    data = data.item(0).getChildNodes();
+	    streamID = ((Element)data).getElementsByTagName("id").item(0).getFirstChild().getNodeValue();
+	    //data.item(11).getFirstChild().getNodeValue();
+	    // The Stream title changes place (doesn't that defeat the point of an API?), so we have to do it this way...
+	    try {
+		streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue().trim();
 	    }
-	    announce(streamData);
+	    catch (NullPointerException e) { }
+	    // Seems the quality can sometimes be contaminated by the title of the stream.
+	    streamQuality = ((Element)data).getElementsByTagName("video_height").item(0).getFirstChild().getNodeValue();
+	    //data.item(17).getFirstChild().getNodeValue();
+	    try {
+		gameName = ((Element)data).getElementsByTagName("meta_game").item(0).getFirstChild().getNodeValue();
+	    }
+	    catch (NullPointerException e) { }
+	    //data.item(27).getFirstChild().getNodeValue();
+	    streamData.add(0, streamID);
+	    streamData.add(1, streamDesc.replaceAll("&#39;", "'").replaceAll("[\\n\\r]", " "));
+	    streamData.add(2, streamQuality);
+	    streamData.add(3, gameName.replaceAll("&#39;", "'"));
 	}
-	catch (Exception e) {
-	    if (engine != null)
-		engine.log("There was a problem while updating Twitch user "+this.channelName);
-	    engine.logError(e, "Twitch", this.channelName);
-	    if (!e.toString().contains("Server returned HTTP response code: 502 for URL")) // Twitch's API throws this crap way too often.
-		twitch.scheduleThreadRestart(this);
-	}
+	announce(streamData);
 	
 	
     }
@@ -229,6 +229,11 @@ public class TwitchChannel implements Announcer, Runnable {
     @Override
     public void shouldUpdate(boolean b) {
 	this.shouldUpdate = b;
+    }
+    
+    @Override
+    public boolean isDead() {
+	return timeTilUpdate() < 0;
     }
     
 }

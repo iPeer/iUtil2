@@ -45,7 +45,7 @@ import java.util.regex.Pattern;
 
 public final class Main implements Runnable {
     
-    public final String BOT_VERSION = "0.345";
+    public final String BOT_VERSION = "0.481";
     
     private static final File DEFAULT_CONFIG_DIR = new File("./config");
     //private static final Server DEFAULT_SERVER = new Server("127.0.0.1", false, 6667);
@@ -229,12 +229,14 @@ public final class Main implements Runnable {
 	    logError(e);
 	    System.exit(1);
 	}
-	log("Connection rety #"+this.connectionRetries);
-	this.SERVER_REGISTERED = false;
-	this.engineThread.interrupt();
-	this.engineRunning = false;
-	this.engineThread = new Thread(this, "iUtil 2 Main Thread");
-	start();
+	finally {
+	    log("Connection rety #"+this.connectionRetries);
+	    this.SERVER_REGISTERED = false;
+	    this.engineThread.interrupt();
+	    this.engineRunning = false;
+	    this.engineThread = new Thread(this, "iUtil 2 Main Thread");
+	    start();
+	}
     }
     
     public void log(String line) {
@@ -433,7 +435,7 @@ public final class Main implements Runnable {
 			log("Encountered a fatal error!");
 			logError(e, "General", line);
 			if (isConnected())
-			    send("QUIT :FATAL: "+e.toString()+" at "+e.getStackTrace()[0]);
+			    send("QUIT :FATAL: "+e.toString()+" at "+e.getStackTrace()[0], false);
 		    }
 		    try { getProfiler().end(); } catch (Exception e) { }
 		}
@@ -511,7 +513,7 @@ public final class Main implements Runnable {
 			.replaceAll("%[HR]%", String.valueOf(Main.HIGHLIGHT))
 			.replaceAll("%E%", String.valueOf(Main.ENDALL))
 			.replaceAll("%DASH%", String.valueOf(Main.DASH));
-		Matcher s = Pattern.compile("%K[0-9]{1,2}(,[0-9]{1,2})?%").matcher(data); // Custom colours, yay
+		Matcher s = Pattern.compile("(%K[0-9]{1,2}(,[0-9]{1,2})?%)").matcher(data); // Custom colours, yay
 		while (s.find()) {
 		    String colours = s.group().split("%K|%")[1];
 		    for (String a : colours.split(","))

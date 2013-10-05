@@ -80,5 +80,20 @@ public class AWeSomeChat implements AnnouncerHandler {
     public void scheduleThreadRestart(Object channel) {
     }
     
+    @Override
+    public int getDeadThreads() {
+	int x = 0;
+	for (IAWeSomeChatTailer a : tailers) {
+	    if (a.isDead())
+		x++;
+	}
+	return x;
+    }
+    
+    	@Override
+	public int getTotalThreads() {
+	    return tailers.size();
+	}
+    
     
 }

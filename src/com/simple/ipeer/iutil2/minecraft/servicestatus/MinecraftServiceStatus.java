@@ -76,12 +76,14 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	for (Iterator<String> it = services.keySet().iterator(); it.hasNext();) {
 	    String key = it.next();
 	    IMinecraftService s = services.get(key);
-	    s.update();
-	    HashMap<String, String> data = s.getData();
-	    line += s.getAddress()+"\01"+data.get("ping")+"\01"+
-		    (data.containsKey("status") && data.get("status").equals("200") ? "up" : "down")+"\01"+
-		    (data.containsKey("errorMessage") ? data.get("errorMessage") : data.get("status"))+"\n";
-	    statusData.put(key, data);
+	    try {
+		s.update();
+		HashMap<String, String> data = s.getData();
+		line += s.getAddress()+"\01"+data.get("ping")+"\01"+
+			(data.containsKey("status") && data.get("status").equals("200") ? "up" : "down")+"\01"+
+			(data.containsKey("errorMessage") ? data.get("errorMessage") : data.get("status"))+"\n";
+		statusData.put(key, data);
+	    } catch (Exception e) { }
 	}
 	try {
 	    FileWriter fw = new FileWriter(new File("./Minecraft/status.api"));
@@ -159,5 +161,15 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
     public HashMap<String, HashMap<String, String>> getStatusData() {
 	return this.statusData;
     }
+
+    @Override
+    public int getDeadThreads() {
+	return (timeTilUpdate() < 0 ? 1 : 0);
+    }
+    
+    	@Override
+	public int getTotalThreads() {
+	    return 1;
+	}
     
 }

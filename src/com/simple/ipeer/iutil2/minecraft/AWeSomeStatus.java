@@ -190,4 +190,14 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable {
 	
     }
     
+    @Override
+    public int getDeadThreads() {
+	return (timeTilUpdate() < 0 ? 1 : 0);
+    }
+    
+    	@Override
+	public int getTotalThreads() {
+	    return 1;
+	}
+    
 }

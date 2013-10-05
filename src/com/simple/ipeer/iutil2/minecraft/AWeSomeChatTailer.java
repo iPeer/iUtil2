@@ -123,9 +123,11 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 			cache.store(new FileOutputStream(markerFile), "");
 		    }
 		    lastUpdate = System.currentTimeMillis();
-		    Thread.sleep((engine == null ? 500 : Long.valueOf(engine.config.getProperty("ascUpdateDelay"))));
+		    Thread.sleep(getUpdateDelay());
 		}
 	    }
+	    if (engine != null)
+		engine.log("Chat Tailer for "+this.serverName+" has stopped!", "AWeSomeChat");
 	    handle.close();
 	}
 	catch (InterruptedException e) { this.isRunning = false; }
@@ -338,6 +340,18 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 		engine.logError(ex, "AWeSomeChat", line, new File(this.cacheDir, "chat.txt").getAbsolutePath());
 	    }
 	}
+    }
+    
+    public long getUpdateDelay() {
+	return (engine == null ? 500 : Long.valueOf(engine.config.getProperty("ascUpdateDelay")));
+    }
+    
+    public long timeTilUpdate() {
+	return (lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
+    }
+    
+    public boolean isDead() {
+	return timeTilUpdate() < -10000;
     }
     
 }
