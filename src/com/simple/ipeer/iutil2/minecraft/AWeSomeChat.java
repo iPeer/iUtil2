@@ -1,6 +1,8 @@
 package com.simple.ipeer.iutil2.minecraft;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,10 +13,13 @@ import java.util.List;
  *
  * @author iPeer
  */
-public class AWeSomeChat implements AnnouncerHandler {
+public class AWeSomeChat implements AnnouncerHandler, DebuggableSub {
     
     private Main engine;
     private List<IAWeSomeChatTailer> tailers;
+    private Throwable lastException;
+    private long lastExceptionTime = 0L;
+    private long lastUpdate = 0L;
     
     public AWeSomeChat(Main engine) {
 	this.engine = engine;
@@ -68,7 +73,7 @@ public class AWeSomeChat implements AnnouncerHandler {
     
     @Override
     public long timeTilUpdate() {
-	return (((AWeSomeChatTailer)this.tailers.iterator().next()).lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
+	return 99999999L;
     }
     
     @Override
@@ -94,6 +99,29 @@ public class AWeSomeChat implements AnnouncerHandler {
 	public int getTotalThreads() {
 	    return tailers.size();
 	}
+
+    @Override
+    public List<Announcer> getAnnouncerList() {
+	List<Announcer> a = new ArrayList<Announcer>();
+	for (IAWeSomeChatTailer b : tailers)
+	    a.add((Announcer)b);
+	return a;
+    }
+
+    @Override
+    public Throwable getLastExeption() {
+	return lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return lastUpdate;
+    }
     
     
 }

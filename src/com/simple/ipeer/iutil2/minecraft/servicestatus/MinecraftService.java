@@ -1,5 +1,7 @@
 package com.simple.ipeer.iutil2.minecraft.servicestatus;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
 import java.net.ConnectException;
@@ -18,13 +20,17 @@ import javax.net.ssl.SSLContext;
  *
  * @author iPeer
  */
-public class MinecraftService implements IMinecraftService {
+public class MinecraftService implements IMinecraftService, Announcer, DebuggableSub {
     
     protected String url;
     protected HashMap<String, String> data;
     protected boolean useHTTPS;
     protected String reqMethod = "GET";
     protected Main engine;
+    private long startupTime = 0L;
+    public long lastUpdate = 0L;
+    private long lastExceptionTime = 0L;
+    private Throwable lastException;
     
     public MinecraftService(String url) {
 	this.url = url;
@@ -58,6 +64,8 @@ public class MinecraftService implements IMinecraftService {
 		    sc.init(null, SSLUtils.trustAll, new java.security.SecureRandom());
 		    HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
 		} catch (GeneralSecurityException ex) {
+		    lastException = ex;
+		    lastExceptionTime = System.currentTimeMillis();
 		    if (engine != null) {
 			engine.log("Couldn't create SSL instance!", "MinecraftService");
 			engine.logError(ex, "MinecraftService");
@@ -95,12 +103,71 @@ public class MinecraftService implements IMinecraftService {
 	    data.put("errorMessage", e.toString());
 	}
 	data.put("ping", Long.toString(System.currentTimeMillis() - pingStart));
+	this.lastUpdate = System.currentTimeMillis();
     }
 
     @Override
     public String getAddress() {
 	return this.url.split("/")[2];
+    }    
+
+    @Override
+    public long timeTilUpdate() {
+	return (this.lastUpdate + engine.getAnnouncers().get("Minecraft Service Status").getUpdateDelay()) - System.currentTimeMillis();
     }
-    
+
+    @Override
+    public void stop() {
+    }
+
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void startIfNotRunning() {
+    }
+
+    @Override
+    public void removeCache() {
+    }
+
+    @Override
+    public void stopIfRunning() {
+    }
+
+    @Override
+    public void shouldUpdate(boolean b) {
+    }
+
+    @Override
+    public boolean isDead() {
+	return false;
+    }
+
+    @Override
+    public String getThreadName() {
+	return "Minecraft Service Status: "+this.url;
+    }
+
+    @Override
+    public long getStartupTime() {
+	return ((MinecraftServiceStatus)engine.getAnnouncers().get("Minecraft Service Status")).getStartupTime();
+    }
+
+    @Override
+    public Throwable getLastExeption() {
+	return this.lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return this.lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return this.lastUpdate;
+    }
     
 }

@@ -1,5 +1,7 @@
 package com.simple.ipeer.iutil2.engine;
 
+import java.util.List;
+
 public interface AnnouncerHandler {
 
 	public boolean addUser(String name);
@@ -13,5 +15,6 @@ public interface AnnouncerHandler {
 	public void scheduleThreadRestart(Object channel);
 	public int getDeadThreads();
 	public int getTotalThreads();
+	public List<Announcer> getAnnouncerList();
 	
 }

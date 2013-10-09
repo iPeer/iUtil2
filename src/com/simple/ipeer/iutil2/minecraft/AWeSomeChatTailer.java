@@ -1,5 +1,7 @@
 package com.simple.ipeer.iutil2.minecraft;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -12,29 +14,28 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import javax.xml.parsers.ParserConfigurationException;
+import org.xml.sax.SAXException;
 
 /**
  *
  * @author iPeer
  */
-public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
+public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announcer, DebuggableSub {
     
     private File tailFile, outFile, cacheDir/*, serverCacheDir*/;
     private Main engine;
     private String serverName = "";
-    
     public long lastUpdate = 0L;
-    
     private boolean isRunning = false;
     private Thread thread;
-    
     private List<String> onlineUsers = new ArrayList<String>();
+    private long startupTime = 0L;
+    private Throwable lastException;
+    private long lastExceptionTime = 0L;
     
     public static void main(String[] args) {
 	AWeSomeChatTailer act = new AWeSomeChatTailer(null, "F:\\MC Server\\server.log", "Test");
@@ -62,6 +63,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
     
     @Override
     public void start() {
+	startupTime = System.currentTimeMillis();
 	this.isRunning = true;
 	(this.thread = new Thread(this, "AWeSome "+this.serverName+" Chat")).start();
 	if (engine != null)
@@ -99,6 +101,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 	    String line = "";
 	    boolean saveCache = false;
 	    while (this.isRunning && !thread.isInterrupted()) {
+		engine.log("AWesome chat is updating.");
 		long marker = Long.valueOf(cache.getProperty("marker", "0"));
 		long newMarker = 0L;
 		handle.seek(marker);
@@ -109,7 +112,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 			parseLine(line);
 		    } catch (Throwable e) {
 			if (engine == null)
-			    e.printStackTrace(); 
+			    e.printStackTrace();
 			else {
 			    engine.log("Unable to parse line.", "AWeSomeChat");
 			    engine.logError(e, "AWeSomeChat", line);
@@ -122,7 +125,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 			saveCache = false;
 			cache.store(new FileOutputStream(markerFile), "");
 		    }
-		    lastUpdate = System.currentTimeMillis();
+		    this.lastUpdate = System.currentTimeMillis();
 		    Thread.sleep(getUpdateDelay());
 		}
 	    }
@@ -133,6 +136,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 	catch (InterruptedException e) { this.isRunning = false; }
 	catch (IOException | NumberFormatException e) {
 	    this.isRunning = false;
+	    this.lastException = e;
+	    this.lastExceptionTime = System.currentTimeMillis();
 	    if (engine == null)
 		e.printStackTrace();
 	    else {
@@ -209,6 +214,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 		if (engine == null)
 		    e.printStackTrace();
 		else {
+		    this.lastException = e;
+		    this.lastExceptionTime = System.currentTimeMillis();
 		    engine.log("Couldn't load or save deaths file", "AWeSomeChat");
 		    engine.logError(e, "AWeSomeChat", new File(this.cacheDir, "deaths.iuc").getAbsolutePath());
 		    
@@ -222,8 +229,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 		for (Iterator<String> it = this.onlineUsers.iterator(); it.hasNext();) {
 		    String user = it.next();
 		    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
-		    .replaceAll("%TYPE%", "left")
-		    .replaceAll("%USER(NAME)?%", user));
+			    .replaceAll("%TYPE%", "left")
+			    .replaceAll("%USER(NAME)?%", user));
 		    logLines.add(data[0]+" "+data[1]+" "+user+" left the game");
 		}
 		this.onlineUsers.clear();
@@ -248,9 +255,9 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 	    if (logLines.isEmpty())
 		if (!(line.contains("Stopping the server") || line.contains("For help, type \"help\" or \"?\"")))
 		    writeToLog(line.replaceAll(" \\[INFO\\]", ""));
-	    else
-		for (Iterator<String> it = logLines.iterator(); it.hasNext();)
-		    writeToLog(it.next());
+		else
+		    for (Iterator<String> it = logLines.iterator(); it.hasNext();)
+			writeToLog(it.next());
 	    
 	}
 	
@@ -296,6 +303,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 		w.write(it.next());
 	    w.close();
 	} catch (IOException e) {
+	    this.lastException = e;
+	    this.lastExceptionTime = System.currentTimeMillis();
 	    if (engine == null)
 		e.printStackTrace();
 	    else {
@@ -319,6 +328,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 	}
 	catch (FileNotFoundException ex) { }
 	catch (IOException ex) {
+	    this.lastException = ex;
+	    this.lastExceptionTime = System.currentTimeMillis();
 	    if (engine == null)
 		ex.printStackTrace();
 	    else {
@@ -333,6 +344,8 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 	    w.write(line+"\r\n");
 	    w.close();
 	} catch (IOException ex) {
+	    this.lastException = ex;
+	    this.lastExceptionTime = System.currentTimeMillis();
 	    if (engine == null)
 		ex.printStackTrace();
 	    else {
@@ -342,16 +355,60 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer {
 	}
     }
     
+    @Override
     public long getUpdateDelay() {
 	return (engine == null ? 500 : Long.valueOf(engine.config.getProperty("ascUpdateDelay")));
     }
     
+    @Override
     public long timeTilUpdate() {
-	return (lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
+	return (this.lastUpdate + this.getUpdateDelay()) - System.currentTimeMillis();
     }
     
+    @Override
     public boolean isDead() {
-	return timeTilUpdate() < -10000;
+	return this.timeTilUpdate() < 0;
+    }
+    
+    @Override
+    public void update() throws IOException, ParserConfigurationException, SAXException {
+    }
+    
+    @Override
+    public void removeCache() {
+    }
+    
+    @Override
+    public void stopIfRunning() {
+    }
+    
+    @Override
+    public void shouldUpdate(boolean b) {
+    }
+    
+    @Override
+    public long getStartupTime() {
+	return this.startupTime;
+    }
+    
+    @Override
+    public Throwable getLastExeption() {
+	return this.lastException;
+    }
+    
+    @Override
+    public long getLastExceptionTime() {
+	return this.lastExceptionTime;
+    }
+    
+    @Override
+    public long getLastUpdateTime() {
+	return this.lastUpdate;
+    }
+
+    @Override
+    public String getThreadName() {
+	return this.thread.getName();
     }
     
 }

@@ -22,9 +22,10 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import com.simple.ipeer.iutil2.engine.Announcer;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 
-public class YouTubeChannel implements Announcer, Runnable {
+public class YouTubeChannel implements Announcer, Runnable, DebuggableSub {
     
     private String channelName;
     private String realChannelName;
@@ -38,6 +39,9 @@ public class YouTubeChannel implements Announcer, Runnable {
     private boolean isSyncing = false;
     private File cacheFile;
     private boolean shouldUpdate = true;
+    private long lastExceptionTime = 0L;
+    private Throwable lastException;
+    private long startupTime = 0L;
     
     public YouTubeChannel (String name, Main engine, YouTube youtube) {
 	this.channelName = this.realChannelName = name;
@@ -101,6 +105,8 @@ public class YouTubeChannel implements Announcer, Runnable {
 		    engine.log("["+this.channelName+"] Cannot update!", "YouTube");
 		    engine.logError(e, "YouTube", this.channelName);
 		}
+		lastException = e;
+		lastExceptionTime = System.currentTimeMillis();
 	    }
 	}
 	if (engine != null)
@@ -228,6 +234,7 @@ public class YouTubeChannel implements Announcer, Runnable {
     
     @Override
     public void start() {
+	startupTime = System.currentTimeMillis();
 	if (engine != null)
 	    engine.log("YouTube Announcer Thread "+this.channelName+" is starting", "YouTube");
 	this.thread = new Thread(this, "YouTube Announcer Thread ("+this.channelName+")");
@@ -264,6 +271,31 @@ public class YouTubeChannel implements Announcer, Runnable {
     @Override
     public boolean isDead() {
 	return timeTilUpdate() < 0;
+    }
+    
+    @Override
+    public String getThreadName() {
+	return this.thread.getName();
+    }
+
+    @Override
+    public Throwable getLastExeption() {
+	return this.lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return this.lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return this.lastUpdate;
+    }
+
+    @Override
+    public long getStartupTime() {
+	return this.startupTime;
     }
     
 }

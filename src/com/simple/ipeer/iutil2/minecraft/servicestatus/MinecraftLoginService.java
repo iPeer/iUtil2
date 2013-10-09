@@ -1,5 +1,6 @@
 package com.simple.ipeer.iutil2.minecraft.servicestatus;
 
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -28,7 +29,7 @@ import javax.net.ssl.SSLContext;
  *
  * @author iPeer
  */
-public class MinecraftLoginService extends MinecraftService implements IMinecraftService {
+public class MinecraftLoginService extends MinecraftService implements IMinecraftService, DebuggableSub {
     
     private MinecraftServiceStatus mcss;
     
@@ -95,6 +96,7 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
 	}
 	data.put("response", line);
 	data.put("ping", Long.toString(System.currentTimeMillis() - pingStart));
+	lastUpdate = System.currentTimeMillis();
     }
     
     private String[] readLogin() {

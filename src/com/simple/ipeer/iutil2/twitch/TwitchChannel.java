@@ -16,11 +16,12 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 import com.simple.ipeer.iutil2.engine.Announcer;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 import javax.xml.parsers.ParserConfigurationException;
 import org.xml.sax.SAXException;
 
-public class TwitchChannel implements Announcer, Runnable {
+public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
     
     private boolean isRunning = false;
     private Main engine;
@@ -30,6 +31,9 @@ public class TwitchChannel implements Announcer, Runnable {
     private Twitch twitch;
     private File cacheFile;
     private boolean shouldUpdate = true;
+    private Throwable lastException;
+    private long lastExceptionTime = 0L;
+    private long startupTime = 0L;
     
     public TwitchChannel(String name, Main engine, Twitch twitch) {
 	this.engine = engine;
@@ -199,6 +203,7 @@ public class TwitchChannel implements Announcer, Runnable {
     
     @Override
     public void start() {
+	startupTime = System.currentTimeMillis();
 	this.isRunning = true;
 	(this.thread = new Thread(this, "Twitch.tv Stream Announcer Thread ("+this.channelName+")")).start();
     }
@@ -234,6 +239,31 @@ public class TwitchChannel implements Announcer, Runnable {
     @Override
     public boolean isDead() {
 	return timeTilUpdate() < 0;
+    }
+    
+    @Override
+    public String getThreadName() {
+	return this.thread.getName();
+    }
+
+    @Override
+    public Throwable getLastExeption() {
+	return this.lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return this.lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return this.lastUpdate;
+    }
+
+    @Override
+    public long getStartupTime() {
+	return this.startupTime;
     }
     
 }

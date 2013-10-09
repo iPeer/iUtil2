@@ -1,5 +1,6 @@
 package com.simple.ipeer.iutil2.twitch;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -12,18 +13,20 @@ import java.util.List;
 import java.util.Scanner;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.Debuggable;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import javax.xml.parsers.ParserConfigurationException;
-import org.xml.sax.SAXException;
 
-public class Twitch implements AnnouncerHandler {
+public class Twitch implements AnnouncerHandler, Debuggable, DebuggableSub {
     
     private Main engine;
     private HashMap<String, TwitchChannel> users;
     public List<TwitchChannel> waitingToSync = new ArrayList<TwitchChannel>();
     private boolean isSyncing = false;
+    private Throwable lastException;
+    private long lastExceptionTime = 0L;
+    private long lastForcedUpdate = 0L;
+    private List<Announcer> announcerList = new ArrayList<Announcer>();
     
     public Twitch (Main engine) {
 	engine.log("Twitch announcer is starting up.", "Twitch");
@@ -79,6 +82,7 @@ public class Twitch implements AnnouncerHandler {
 	    while (s.hasNextLine()) {
 		String user = s.nextLine();
 		ret.put(user.toLowerCase(), new TwitchChannel(user, engine, this));
+		announcerList.add(ret.get(user.toLowerCase()));
 	    }
 	    s.close();
 	    if (engine != null)
@@ -103,6 +107,7 @@ public class Twitch implements AnnouncerHandler {
 	    return false;
 	}
 	TwitchChannel a = new TwitchChannel(name, engine, this);
+	announcerList.add(a);
 	try {
 	    a.update();
 	} catch (Throwable ex) {
@@ -131,6 +136,7 @@ public class Twitch implements AnnouncerHandler {
 		    }
 	    }
 	    TwitchChannel a = this.users.get(name.toLowerCase());
+	    announcerList.remove(a);
 	    a.stop();
 	    a.removeCache();
 	    this.users.remove(name.toLowerCase());
@@ -227,6 +233,30 @@ public class Twitch implements AnnouncerHandler {
     @Override
     public int getTotalThreads() {
 	return users.size();
+    }
+
+    @Override
+    public void writeDebug(FileWriter fw) {
+    }
+
+    @Override
+    public Throwable getLastExeption() {
+	return lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return lastForcedUpdate;
+    }
+
+    @Override
+    public List<Announcer> getAnnouncerList() {
+	return announcerList;
     }
     
 }

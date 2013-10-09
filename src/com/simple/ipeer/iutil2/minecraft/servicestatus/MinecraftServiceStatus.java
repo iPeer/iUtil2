@@ -1,19 +1,24 @@
 package com.simple.ipeer.iutil2.minecraft.servicestatus;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  *
  * @author iPeer
  */
-public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
+public class MinecraftServiceStatus implements AnnouncerHandler, Runnable, DebuggableSub {
     
     private long lastUpdate = 0L;
     private Main engine;
@@ -22,6 +27,10 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
     private boolean isRunning = false;
     private Thread thread;
     private HashMap<String, HashMap<String, String>> statusData;
+    private List<Announcer> announcerList = new ArrayList<Announcer>();
+    private long lastExceptionTime = 0L;
+    private Throwable lastException;
+    private long startupTime = 0L;
     
     public static void main (String[] args) {
 	MinecraftServiceStatus a = new MinecraftServiceStatus(null);
@@ -57,6 +66,10 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	services.put("Yggdrasil Auth", new MinecraftService("https://authserver.mojang.com/"));
 	services.put("Login", new MinecraftLoginService("https://login.minecraft.net/", this));
 	services.put("Session", new MinecraftService("https://session.minecraft.net/game/checkserver.jsp"));
+	for (IMinecraftService b : services.values())
+	    announcerList.add((Announcer)b);
+	    
+	startupTime = System.currentTimeMillis();
 	
     }
     
@@ -127,7 +140,7 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
     
     @Override
     public long timeTilUpdate() {
-	return (lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
+	return (this.lastUpdate + this.getUpdateDelay()) - System.currentTimeMillis();
     }
     
     @Override
@@ -147,6 +160,8 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	    try {
 		Thread.sleep(getUpdateDelay());
 	    } catch (InterruptedException ex) {
+		lastException = ex;
+		lastExceptionTime = System.currentTimeMillis();
 		this.isRunning = false;
 		engine.log("Couldn't sleep!", "MinecraftServiceStatus");
 		engine.logError(ex, "MinecraftServiceStatus");
@@ -171,5 +186,29 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable {
 	public int getTotalThreads() {
 	    return 1;
 	}
+
+    @Override
+    public List<Announcer> getAnnouncerList() {
+	return announcerList;
+    }
+
+    @Override
+    public Throwable getLastExeption() {
+	return lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return lastUpdate;
+    }
+    
+    public long getStartupTime() {
+	return startupTime;
+    }
     
 }

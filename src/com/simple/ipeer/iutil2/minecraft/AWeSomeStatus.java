@@ -1,11 +1,15 @@
 package com.simple.ipeer.iutil2.minecraft;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.Debuggable;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,18 +17,23 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.xml.parsers.ParserConfigurationException;
+import org.xml.sax.SAXException;
 
 /**
  *
  * @author iPeer
  */
-public class AWeSomeStatus implements AnnouncerHandler, Runnable {
+public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub, Announcer {
     
     private boolean isRunning = false;
     private Thread thread;
     private long lastUpdate = 0L;
     private Main engine;
     private HashMap<String, Long> downServers;
+    private Throwable lastException;
+    private long lastExceptionTime = 0L;
+    private long startupTime = 0L;
     
     public AWeSomeStatus(Main engine) {
 	this.engine = engine;
@@ -41,6 +50,7 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable {
     }
     
     public void start() {
+	this.startupTime = System.currentTimeMillis();
 	if (!this.isRunning) {
 	    this.isRunning = true;
 	    (this.thread = new Thread(this, "AWeSome server status thread")).start();
@@ -177,7 +187,7 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable {
     
     @Override
     public long timeTilUpdate() {
-	return (this.lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
+	return (this.lastUpdate + this.getUpdateDelay()) - System.currentTimeMillis();
     }
     
     @Override
@@ -192,12 +202,69 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable {
     
     @Override
     public int getDeadThreads() {
-	return (timeTilUpdate() < 0 ? 1 : 0);
+	return (this.timeTilUpdate() < 0 ? 1 : 0);
     }
     
     	@Override
 	public int getTotalThreads() {
 	    return 1;
 	}
+
+    @Override
+    public List<Announcer> getAnnouncerList() {
+	List<Announcer> a = new ArrayList<Announcer>();
+	a.add((Announcer)this);
+	return a;
+    }
+
+    @Override
+    public Throwable getLastExeption() {
+	return this.lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return this.lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return this.lastUpdate;
+    }
+
+    @Override
+    public void update() throws IOException, ParserConfigurationException, SAXException {
+    }
+
+    @Override
+    public void startIfNotRunning() {
+    }
+
+    @Override
+    public void removeCache() {
+    }
+
+    @Override
+    public void stopIfRunning() {
+    }
+
+    @Override
+    public void shouldUpdate(boolean b) {
+    }
+
+    @Override
+    public boolean isDead() {
+	return this.timeTilUpdate() < 0;
+    }
+
+    @Override
+    public String getThreadName() {
+	return this.thread.getName();
+    }
+
+    @Override
+    public long getStartupTime() {
+	return this.startupTime;
+    }
     
 }

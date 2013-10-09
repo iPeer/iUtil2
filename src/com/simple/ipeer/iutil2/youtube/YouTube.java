@@ -1,5 +1,6 @@
 package com.simple.ipeer.iutil2.youtube;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -28,11 +29,14 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.Debuggable;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
+import java.io.FileWriter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class YouTube implements AnnouncerHandler {
+public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
     
     public HashMap<String, YouTubeChannel> CHANNEL_LIST;
     protected Main engine;
@@ -40,6 +44,11 @@ public class YouTube implements AnnouncerHandler {
     private boolean hasStarted = false;
     private static YouTube youtubeInstance;
     private boolean isSyncing = false;
+    private long lastForcedUpdate = 0L;
+    private Throwable lastException;
+    private long lastExceptionTime = 0L;
+    private List<Announcer> announcerList = new ArrayList<Announcer>();
+    
     public YouTube(Main engine) {
 	if (engine != null)
 	    engine.log("YouTube announcer is starting up.", "YouTube");
@@ -101,12 +110,15 @@ public class YouTube implements AnnouncerHandler {
 		channels = b.getProperty("users").split(",");
 	    }
 	    catch (Exception e) {
+		lastException = e;
+		lastExceptionTime = System.currentTimeMillis();
 		engine.log("Couldn't load username list!", "YouTube");
 		engine.logError(e, "YouTube");
 	    }
 	}
 	for (String c : channels) {
 	    YouTubeChannel d = new YouTubeChannel(c, engine, this);
+	    announcerList.add(d);
 	    d.setSyncing(true); // Stops the bot spamming the hell out of channels after downtime or accidental cache invalidation.
 	    //d.startIfNotRunning();
 	    //waitingToSync.add(d);
@@ -129,6 +141,8 @@ public class YouTube implements AnnouncerHandler {
 	    if (engine != null)
 		engine.log("Couldn't save youtube username list!", "YouTube");
 	    engine.logError(e, "YouTube");
+	    lastException = e;
+	    lastExceptionTime = System.currentTimeMillis();
 	}
     }
     
@@ -162,10 +176,13 @@ public class YouTube implements AnnouncerHandler {
 	if (this.CHANNEL_LIST.containsKey(name.toLowerCase()))
 	    return false;
 	YouTubeChannel a = new YouTubeChannel(name, engine, this);
+	announcerList.add(a);
 	a.setSyncing(true);
 	try {
 	    a.update();
 	} catch (Throwable ex) {
+	    lastException = ex;
+	    lastExceptionTime = System.currentTimeMillis();
 	    engine.log("Couldn't add user "+name+" to YouTube watch list due to error. See error log for details", "YouTube");
 	    engine.logError(ex, "YouTube", name);
 	    throw new RuntimeException("Couldn't add user to watch list: "+ex.toString()+" @ "+ex.getStackTrace()[0]);
@@ -191,6 +208,7 @@ public class YouTube implements AnnouncerHandler {
 		    }
 	    }
 	    YouTubeChannel c = this.CHANNEL_LIST.get(name.toLowerCase());
+	    announcerList.remove(c);
 	    c.removeCache();
 	    c.stopIfRunning();
 	    this.CHANNEL_LIST.remove(name.toLowerCase());
@@ -209,6 +227,7 @@ public class YouTube implements AnnouncerHandler {
 		engine.logError(ex, "YouTube");
 		engine.log("Couldn't update channel "+c.getName()+" due to error. See error log for details.", "Twitch");
 	    }
+	lastForcedUpdate = System.currentTimeMillis();
     }
     
     @Override
@@ -408,6 +427,30 @@ public class YouTube implements AnnouncerHandler {
     @Override
     public int getTotalThreads() {
 	return CHANNEL_LIST.size();
+    }
+    
+    @Override
+    public void writeDebug(FileWriter fw) {
+    }
+    
+    @Override
+    public Throwable getLastExeption() {
+	return lastException;
+    }
+    
+    @Override
+    public long getLastExceptionTime() {
+	return lastExceptionTime;
+    }
+    
+    @Override
+    public long getLastUpdateTime() {
+	return lastForcedUpdate;
+    }
+
+    @Override
+    public List<Announcer> getAnnouncerList() {
+	return announcerList;
     }
     
 }

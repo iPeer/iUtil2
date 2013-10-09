@@ -39,6 +39,7 @@ import com.simple.ipeer.iutil2.minecraft.servicestatus.MinecraftServiceStatus;
 import com.simple.ipeer.iutil2.profiler.Profiler;
 import com.simple.ipeer.iutil2.tell.Tell;
 import com.simple.ipeer.iutil2.twitch.Twitch;
+import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,6 +74,7 @@ public final class Main implements Runnable {
     public String CURRENT_NETWORK;
     public HashMap<String, String> NETWORK_SETTINGS;
     public HashMap<String, AnnouncerHandler> announcers;
+    public Debugger debugger;
     
     private Thread engineThread;
     private boolean engineRunning = false;
@@ -205,6 +207,7 @@ public final class Main implements Runnable {
 	console = new Console(this);
 	profiler = new Profiler(this);
 	ial = new IAL(this);
+	debugger = new Debugger(this);
 	
 	// Now everything should be okay and we can start the bot...
 	
@@ -653,6 +656,42 @@ public final class Main implements Runnable {
     
     public IAL getIAL() {
 	return this.ial;
+    }
+    
+    public Debugger getDebugger() {
+	return this.debugger;
+    }
+    
+    public List<String> generateInfoOutput() {
+	long totalMemory = Runtime.getRuntime().totalMemory();
+	long freeMemory = Runtime.getRuntime().freeMemory();
+	long usedMemory = totalMemory - freeMemory;
+	List<String> out = new ArrayList<String>();
+	out.add("Memory: "+(usedMemory / 1024L / 1024L)+"MB/"+(totalMemory / 1024L / 1024L)+"MB");
+	String threads = "";
+	for (String a : engine.getAnnouncers().keySet()) {
+	    String time = "%B%stopped%B%";
+	    AnnouncerHandler ah = engine.getAnnouncers().get(a);
+	    int deadThreads = ah.getDeadThreads();
+	    for (Announcer an : ah.getAnnouncerList()) { // Loop through to the first alive thread (if any)
+		if (!an.isDead()) {
+		    int ttu = (int)(an.timeTilUpdate() / 1000L);
+		    int seconds = ttu % 60;
+		    int minutes = (int)ttu / 60;
+		    int hours = (int)(Math.floor(minutes / 60));
+		    if (hours > 0)
+			minutes -= hours*60;
+		    time = (hours > 0 ? String.format("%02d", hours)+":" : "")+String.format("%02d", minutes)+":"+String.format("%02d", seconds);
+		}
+	    }
+	    threads = threads+(threads.length() > 0 ? ", " : "")+a+": "+time+" ("+deadThreads+" of "+ah.getTotalThreads()+" dead)";
+	}
+	out.add("Announcers (updating in): "+threads);
+	out.add("Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+", C: "+System.getProperty("java.class.version")+" VM: "+System.getProperty("java.vm.version")+" / "+System.getProperty("java.vm.specification.version"));
+	out.add("OS: "+System.getProperty("os.name")+" / "+System.getProperty("os.version"));
+	out.add("Connection: "+engine.getConnection().toString());
+	out.add("IRC Traffic (estimate): Sent: "+Filesize.calculate(engine.getBytesSent())+", Received: "+Filesize.calculate(engine.getBytesReceived()));
+	return out;
     }
     
 }

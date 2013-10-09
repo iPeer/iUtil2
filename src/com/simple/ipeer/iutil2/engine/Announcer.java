@@ -15,5 +15,7 @@ public interface Announcer {
 	public void stopIfRunning();
 	public void shouldUpdate(boolean b);
 	public boolean isDead();
+	public String getThreadName();
+	public long getStartupTime();
 	
 }

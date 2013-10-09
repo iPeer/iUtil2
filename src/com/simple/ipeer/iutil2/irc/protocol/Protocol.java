@@ -252,30 +252,7 @@ public class Protocol {
 		}
 		
 		else if (commandName.matches("(info(r?mation)?|status)") && isAdmin) {
-		    long totalMemory = Runtime.getRuntime().totalMemory();
-		    long freeMemory = Runtime.getRuntime().freeMemory();
-		    long usedMemory = totalMemory - freeMemory;
-		    List<String> out = new ArrayList<String>();
-		    out.add("Memory: "+(usedMemory / 1024L / 1024L)+"MB/"+(totalMemory / 1024L / 1024L)+"MB");
-		    String threads = "";
-		    for (String a : engine.getAnnouncers().keySet()) {
-			AnnouncerHandler ah = engine.getAnnouncers().get(a);
-			int deadThreads = ah.getDeadThreads();
-			int ttu = (int)(ah.timeTilUpdate() / 1000L);
-			int seconds = ttu % 60;
-			int minutes = (int)ttu / 60;
-			int hours = (int)(Math.floor(minutes / 60));
-			if (hours > 0)
-			    minutes -= hours*60;
-			String time = (hours > 0 ? String.format("%02d", hours)+":" : "")+String.format("%02d", minutes)+":"+String.format("%02d", seconds);
-			threads = threads+(threads.length() > 0 ? ", " : "")+a+": "+time+" ("+deadThreads+" of "+ah.getTotalThreads()+" dead)";
-		    }
-		    out.add("Announcers (updating in): "+threads);
-		    out.add("Java: "+System.getProperty("sun.arch.data.model")+"-bit "+System.getProperty("java.version")+", C: "+System.getProperty("java.class.version")+" VM: "+System.getProperty("java.vm.version")+" / "+System.getProperty("java.vm.specification.version"));
-		    out.add("OS: "+System.getProperty("os.name")+" / "+System.getProperty("os.version"));
-		    out.add("Connection: "+engine.getConnection().toString());
-		    out.add("IRC Traffic (estimate): Sent: "+Filesize.calculate(engine.getBytesSent())+", Received: "+Filesize.calculate(engine.getBytesReceived()));
-		    engine.send(sendPrefix, out, true, false);
+		    engine.send(sendPrefix, engine.generateInfoOutput(), true, false);
 		}
 		
 		else if (commandName.equals("reconnect") && isAdmin) {
@@ -492,6 +469,19 @@ public class Protocol {
 			engine.send(sendPrefix+" :Thread list dumped to "+out.getAbsoluteFile());
 		    } catch (IOException ex) {
 			engine.send(sendPrefix+" :Couldn't create thread list: "+ex.toString()+" @ "+ex.getStackTrace()[0]);
+		    }
+		}
+		else if (commandName.equalsIgnoreCase("dumpdebug") && isAdmin) {
+		    engine.send(sendPrefix+" :Creating debug dump...");
+		    try {
+			File a = new File((engine == null ? "logs/" : engine.logDir)+"/debug-"+System.currentTimeMillis()+".txt");
+			engine.getDebugger().writeDebug(new FileWriter(a));
+			engine.send(sendPrefix+" :Debug dump written to "+a.getAbsolutePath());
+		    }
+		    catch (Throwable e) {
+			engine.logError(e, "Debugger");
+			engine.log("Couldn't write debug dump.", "Debugger");
+			engine.send(sendPrefix+" :Couldn't create debug dump. See error log for details.");
 		    }
 		}
 		
