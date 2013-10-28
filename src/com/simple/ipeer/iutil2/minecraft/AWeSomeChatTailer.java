@@ -13,6 +13,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
+import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,9 +37,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     private long startupTime = 0L;
     private Throwable lastException;
     private long lastExceptionTime = 0L;
+    private boolean serverStopped = false;
     
     public static void main(String[] args) {
-	AWeSomeChatTailer act = new AWeSomeChatTailer(null, "F:\\MC Server\\server.log", "Test");
+	AWeSomeChatTailer act = new AWeSomeChatTailer(null, "F:\\MC Server\\logs\\latest.log", "Test");
 	act.startIfNotRunning();
     }
     
@@ -89,7 +91,6 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     @Override
     public void run() {
 	try {
-	    RandomAccessFile handle = new RandomAccessFile(this.tailFile, "r");
 	    Properties cache = new Properties();
 	    File markerFile = new File(this.cacheDir, "marker.iuc");
 	    if (markerFile.exists())
@@ -101,8 +102,12 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    String line = "";
 	    boolean saveCache = false;
 	    while (this.isRunning && !thread.isInterrupted()) {
-		engine.log("AWesome chat is updating.");
+		RandomAccessFile handle = new RandomAccessFile(this.tailFile, "r");
 		long marker = Long.valueOf(cache.getProperty("marker", "0"));
+		if (marker > this.tailFile.length()) {
+		    engine.log("Marker is larger than the file's total size (possibly due to the 1.7 update), setting it to 0 and continuing.", "AWeSome Chat ("+this.serverName+")");
+		    marker = 0L;
+		}
 		long newMarker = 0L;
 		handle.seek(marker);
 		if ((line = handle.readLine()) != null) {
@@ -114,10 +119,15 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 			if (engine == null)
 			    e.printStackTrace();
 			else {
-			    engine.log("Unable to parse line.", "AWeSomeChat");
-			    engine.logError(e, "AWeSomeChat", line);
+			    engine.log("Unable to parse line.", "AWeSomeChat ("+this.serverName+")");
+			    engine.logError(e, "AWeSomeChat ("+this.serverName+")", line);
 			}
 		    }
+//		    if (this.serverStopped) {
+//			cache.put("marker", "0");
+//			this.serverStopped = false;
+//		    }
+//		    else
 		    cache.put("marker", Long.toString(newMarker));
 		}
 		else {
@@ -128,10 +138,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		    this.lastUpdate = System.currentTimeMillis();
 		    Thread.sleep(getUpdateDelay());
 		}
+		handle.close();
 	    }
 	    if (engine != null)
 		engine.log("Chat Tailer for "+this.serverName+" has stopped!", "AWeSomeChat");
-	    handle.close();
 	}
 	catch (InterruptedException e) { this.isRunning = false; }
 	catch (IOException | NumberFormatException e) {
@@ -148,20 +158,23 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     }
     
     public void parseLine(String line) {
+	//System.err.println(line);
 	if (line.length() == 0) { return; }
 	
 	List<String> out = new ArrayList<String>();
 	List<String> logLines = new ArrayList<String>();
-	if (line.contains("[INFO] <")) { // Chat
+	if (line.contains("[Server thread/INFO]: <")) { // Chat
 	    String[] data = line.split(" ");
 	    String user = data[3].replaceAll("[\\<\\>]", "");
 	    String message = line.split(user+"> ")[1];
-	    if (!this.onlineUsers.contains(user))
+	    if (!this.onlineUsers.contains(user)) {
 		this.onlineUsers.add(user);
+		saveOnline();
+	    }
 	    out.add((engine == null ? "%C2%%USER%%C1%: %MESSAGE%" : engine.config.getProperty("ascOutputFormat"))
 		    .replaceAll("%USER(NAME)?%", user)
 		    .replaceAll("%MESSAGE%", message));
-	    logLines.add(data[0]+" "+data[1]+" "+user+": "+message);
+	    logLines.add(data[0]+" "+user+": "+message);
 	}
 	
 	else if (line.contains("left the game") || line.contains("joined the game")) { // (dis)connects
@@ -179,21 +192,34 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 		    .replaceAll("%TYPE%", type)
 		    .replaceAll("%USER(NAME)?%", user));
+	    logLines.add(data[0]+" "+user+" "+type+" the game.");
 	}
 	
-	else if (line.contains("[INFO] *")) { // Actions
+	else if (line.contains("[Server thread/INFO]: *")) { // Actions
 	    String[] data = line.split(" ");
 	    String user = data[4];
 	    String message = line.split(user+" ")[1];
 	    if (!this.onlineUsers.contains(user))
 		this.onlineUsers.add(user);
 	    
-	    out.add((engine == null ? "%C2%%USER%%C1% %ACTION%" : engine.config.getProperty("ascOutputActionFormat"))
+	    out.add((engine == null ? "%C2%* %USER%%C1% %ACTION%" : engine.config.getProperty("ascOutputActionFormat"))
 		    .replaceAll("%ACTION%", message)
 		    .replaceAll("%USER(NAME)?%", user));
+	    logLines.add(data[0]+" * "+user+" "+message);
 	}
 	
-	else if (line.contains("[INFO]") && onlineUsers.contains(line.split(" ")[3]) && !line.contains("lost connection")) { // Deaths
+	else if (line.contains("[Server thread/INFO]:") && onlineUsers.contains(line.split(" ")[3]) && !line.contains("lost connection") && line.contains("achievement")) { // Achievements
+	    String[] data = line.split(" ");
+	    String user = data[3];
+	    String achievementData = line.split("achievement \\[")[1];
+	    String achievementName = achievementData.substring(0, achievementData.length() - 1);
+	    out.add((engine == null ? "%C2%%USER%%C1% earned the achievement %C2%%ACHIEVEMENTNAME%%C1%!" : engine.config.getProperty("ascOutputAchievementFormat"))
+		    .replaceAll("%ACHIEVEMENTNAME%", achievementName)
+		    .replaceAll("%USER(NAME)?%", user));
+	    logLines.add(data[0]+" "+user+" has earned the achievement "+achievementName);
+	}
+	
+	else if (line.contains("[Server thread/INFO]:") && onlineUsers.contains(line.split(" ")[3]) && !line.contains("lost connection")) { // Deaths
 	    String[] data = line.split(" ");
 	    String user = data[3];
 	    String deathMessage = line.split(user+" ")[1];
@@ -201,6 +227,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1% %DEATHMESSAGE%" : engine.config.getProperty("ascOutputDeathFormat"))
 		    .replaceAll("%DEATHMESSAGE%", deathMessage)
 		    .replaceAll("%USER(NAME)?%", user));
+	    logLines.add(data[0]+" "+user+" "+deathMessage);
 	    Properties deaths = new Properties();
 	    try {
 		if (new File(this.cacheDir, "deaths.iuc").exists())
@@ -209,6 +236,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		out.add("%C2%"+user+"%C1% has died "+(death == 1 ? "for the first time!" : "%C2%"+death+"%C1% times!"));
 		deaths.put(user, Integer.toString(death));
 		deaths.store(new FileOutputStream(new File(this.cacheDir, "deaths.iuc")), "Death counter file");
+		logLines.add(data[0]+" "+user+" has died "+(death == 1 ? "for the first time!" : +death+" times!"));
 	    }
 	    catch (IOException | NumberFormatException e) {
 		if (engine == null)
@@ -223,7 +251,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    }
 	}
 	
-	else if (line.contains("Stopping the server")) { //Server stop
+	else if (line.contains("Stopping server") && !this.serverStopped) { //Server stop
 	    String[] data = line.split(" ");
 	    if (!this.onlineUsers.isEmpty()) {
 		for (Iterator<String> it = this.onlineUsers.iterator(); it.hasNext();) {
@@ -231,33 +259,33 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 			    .replaceAll("%TYPE%", "left")
 			    .replaceAll("%USER(NAME)?%", user));
-		    logLines.add(data[0]+" "+data[1]+" "+user+" left the game");
+		    logLines.add(data[0]+" "+user+" left the game.");
 		}
 		this.onlineUsers.clear();
 		saveOnline();
 	    }
 	    out.add("Server stopping!");
+	    this.serverStopped = true;
 	}
 	
-	else if (line.contains("For help, type \"help\" or \"?\"")) { // Server started
-	    out.add("Server started.");
+	else if (line.contains("For help, type \"help\" or \"?\"") && this.serverStopped) { // Server started
+	    this.serverStopped = false;
+	    out.add("Server started!");
 	}
-	
 	if (!out.isEmpty()) {
-	    for (Iterator<String> it = out.iterator(); it.hasNext();) {
-		String outLine = it.next();
+	    for (String outLine : out) {
 		if (engine == null)
 		    System.err.println(("%C1%[%C2%AWeSome %SERVERNAME%%C1%]: "+outLine).replaceAll("%SERVER(NAME)?%", this.serverName).replaceAll("%C[12]+%", ""));
 		else
 		    engine.send("PRIVMSG #QuestHelp :"+(engine.config.getProperty("ascOutputPrefix")+outLine).replaceAll("%SERVER(NAME)?%", this.serverName));
 	    }
 	    
-	    if (logLines.isEmpty())
-		if (!(line.contains("Stopping the server") || line.contains("For help, type \"help\" or \"?\"")))
-		    writeToLog(line.replaceAll(" \\[INFO\\]", ""));
-		else
-		    for (Iterator<String> it = logLines.iterator(); it.hasNext();)
-			writeToLog(it.next());
+	    if (!logLines.isEmpty())
+//		if (!(line.contains("Stopping server") || line.contains("For help, type \"help\" or \"?\"")))
+//		    writeToLog(line);
+//		else
+		for (Iterator<String> it = logLines.iterator(); it.hasNext();)
+		    writeToLog(it.next());
 	    
 	}
 	
@@ -300,7 +328,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	}
 	try (FileWriter w = new FileWriter(new File(this.cacheDir, "online.iuc"), false)) {
 	    for (Iterator<String> it = onlineUsers.iterator(); it.hasNext();)
-		w.write(it.next());
+		w.write(it.next()+"\n");
 	    w.close();
 	} catch (IOException e) {
 	    this.lastException = e;
@@ -405,7 +433,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     public long getLastUpdateTime() {
 	return this.lastUpdate;
     }
-
+    
     @Override
     public String getThreadName() {
 	return this.thread.getName();

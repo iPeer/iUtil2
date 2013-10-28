@@ -28,15 +28,16 @@ public class AWeSomeChat implements AnnouncerHandler, DebuggableSub {
 	settings.put("ascOutputPrefix", "%C1%[%C2%AWeSome %SERVERNAME%%C1%]: ");
 	settings.put("ascOutputFormat", "%C2%%USER%%C1%: %MESSAGE%");
 	settings.put("ascOutputInOutFormat", "%C2%%USER%%C1% %TYPE% the game.");
-	settings.put("ascOutputActionFormat", "%C2%%USER% %ACTION%");
+	settings.put("ascOutputActionFormat", "%C2%* %USER% %ACTION%");
 	settings.put("ascOutputDeathFormat", "%C2%%USER%%C1% %DEATHMESSAGE%");
+	settings.put("ascOutputAchievementFormat", "%C2%%USER%%C1% earned the achievement %C2%%ACHIEVEMENTNAME%%C1%!");
 	engine.createConfigDefaults(settings);
 	
 	tailers = new ArrayList<IAWeSomeChatTailer>();
 	
-	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/survival/server.log", "Survival"));
-	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/creative/server.log", "Creative"));
-	
+	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/survival/logs/latest.log", "Survival"));
+	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/creative/logs/latest.log", "Creative"));
+	tailers.add(new AWeSomeChatTailer(engine, "F:\\MC Server\\logs\\latest.log", "Test")); // Test server
     }
     
     @Override
