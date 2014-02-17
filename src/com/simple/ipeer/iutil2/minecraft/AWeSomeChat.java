@@ -37,7 +37,7 @@ public class AWeSomeChat implements AnnouncerHandler, DebuggableSub {
 	
 	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/survival/logs/latest.log", "Survival"));
 	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/creative/logs/latest.log", "Creative"));
-	tailers.add(new AWeSomeChatTailer(engine, "F:\\MC Server\\logs\\latest.log", "Test")); // Test server
+	//tailers.add(new AWeSomeChatTailer(engine, "F:\\MC Server\\logs\\latest.log", "Test")); // Test server
     }
     
     @Override

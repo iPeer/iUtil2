@@ -1,5 +1,7 @@
 package com.simple.ipeer.iutil2.engine;
 
+import com.simple.ipeer.iutil2.commands.base.CommandManager;
+import com.simple.ipeer.iutil2.commands.base.ICommandSender;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.DataInputStream;
@@ -37,16 +39,21 @@ import com.simple.ipeer.iutil2.minecraft.AWeSomeChat;
 import com.simple.ipeer.iutil2.minecraft.AWeSomeStatus;
 import com.simple.ipeer.iutil2.minecraft.servicestatus.MinecraftServiceStatus;
 import com.simple.ipeer.iutil2.profiler.Profiler;
+import com.simple.ipeer.iutil2.reddit.GameDeals;
 import com.simple.ipeer.iutil2.tell.Tell;
 import com.simple.ipeer.iutil2.twitch.Twitch;
+import com.simple.ipeer.iutil2.twitter.Twitter;
 import com.simple.ipeer.iutil2.util.Filesize;
 import com.simple.ipeer.iutil2.youtube.YouTube;
+import java.util.Scanner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class Main implements Runnable {
     
-    public final String BOT_VERSION = "0.481";
+    public final String BOT_VERSION = "0.714";
     
     private static final File DEFAULT_CONFIG_DIR = new File("./config");
     //private static final Server DEFAULT_SERVER = new Server("127.0.0.1", false, 6667);
@@ -89,11 +96,14 @@ public final class Main implements Runnable {
     private Profiler profiler;
     private long bytesSent = 0L;
     private long bytesReceived = 0L;
+    private Protocol protocol;
     
     public List<OfflineMessage> offlineMessages = new ArrayList<OfflineMessage>();
     private Console console;
     private Tell tell;
     private IAL ial;
+    private CommandManager commandManager;
+    private Twitter twitter;
     
     
     public static void main(String[] args) {
@@ -105,7 +115,7 @@ public final class Main implements Runnable {
 		startArgs.put(c[0].replace("-", ""), c[1]);
 	    }
 	    catch (ArrayIndexOutOfBoundsException e) {
-		System.err.println("Invalid command line parameter passed '"+c+"', ignoring.");
+		System.err.println("Invalid command line parameter passed '"+c[0]+"', ignoring.");
 		continue;
 	    }
 	}
@@ -158,6 +168,10 @@ public final class Main implements Runnable {
 	// Now that that stuff is done, load the config.
 	loadConfig();
 	
+	String cmdLine = "Command line args:";
+	for (String k : args.keySet())
+	    cmdLine += " -"+k+"="+args.get(k);
+	log(cmdLine);
 	// Now we change the config should anything differ in the command line.
 	
 	if (args.containsKey("server") && !config.getProperty("server").equals(args.get("server")))
@@ -203,11 +217,19 @@ public final class Main implements Runnable {
 	announcers.put("AWeSome Status", new AWeSomeStatus(this));
 	announcers.put("AWeSome Chat", new AWeSomeChat(this));
 	announcers.put("Minecraft Service Status", new MinecraftServiceStatus(this));
+	announcers.put("/r/GameDeals Announcer", new GameDeals(this));
 	tell = new Tell(this);
 	console = new Console(this);
 	profiler = new Profiler(this);
 	ial = new IAL(this);
 	debugger = new Debugger(this);
+	commandManager = new CommandManager(this);
+	twitter = new Twitter(this);
+	
+	// Load any offline messages, if they exist.
+	
+	if (new File("offlinemessages.uic").exists())
+	    loadOfflineMessages();
 	
 	// Now everything should be okay and we can start the bot...
 	
@@ -242,24 +264,35 @@ public final class Main implements Runnable {
 	}
     }
     
+    public void log(String line, Class clazz) {
+	Logger.getLogger(clazz.getName()).log(Level.INFO, line);
+    }
+    
     public void log(String line) {
 	log(line, "DEBUG");
     }
     
-    public void log(String line, String type) {
+    public void log(String line, String type, LogLevel level) {
+	if (level == LogLevel.NEVER || level == LogLevel.NONE) { return; }
 	String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
-	String out = time+" ["+type+"] "+line;
-	if (Boolean.valueOf(config.getProperty("debug")))
-	    System.out.println(out.replaceAll("(\\r\\n|\\n\\r)", ""));
-	try {
-	    logWriter.write(out.replaceAll("(\\r\\n|\\n\\r)", "")+"\r\n");
-	    logWriter.flush();
+	String logOut = time+" ["+type+"] "+line;
+	if ((level == LogLevel.DEBUG_ONLY || level == LogLevel.LOG_AND_DEBUG || level == LogLevel.ALL) && config.getProperty("debug").equals("true")) {
+	    System.out.println(logOut);
 	}
-	catch (IOException e) {
-	    System.err.println("Cannot write to log file!");
-	    logError(e);
+	if (level == LogLevel.LOG_AND_DEBUG || level == LogLevel.LOG_ONLY || level == LogLevel.ALL) {
+	    try {
+		logWriter.write(logOut.replaceAll("(\\r\\n|\\n\\r)", "")+"\r\n");
+		logWriter.flush();
+	    }
+	    catch (IOException e) {
+		System.err.println("Cannot write to log file!");
+		logError(e);
+	    }
 	}
-	
+    }
+    
+    public void log(String line, String type) {
+	log(line, type, LogLevel.LOG_AND_DEBUG);
     }
     
     public void logException(Throwable e) {
@@ -307,7 +340,7 @@ public final class Main implements Runnable {
     }
     
     public void loadConfig() {
-	log("Attempting to load config from "+configFile.getAbsolutePath()+"...");
+	//log("Attempting to load config from "+configFile.getAbsolutePath()+"...");
 	if (config == null)
 	    config = new Properties();
 	if (!configFile.exists()) {
@@ -389,7 +422,7 @@ public final class Main implements Runnable {
 	
 	// Connecting to IRC
 	
-	log("Attempting to connect to "+config.getProperty("server")+":"+config.getProperty("port")+"/"+config.getProperty("ssl")+"...");
+	log("Attempting to connect to "+config.getProperty("server")+":"+config.getProperty("port")+(config.getProperty("ssl").equals("true") ? " (SSL)" : "")+"...");
 	try {
 	    if (Boolean.valueOf(config.getProperty("ssl"))) {
 		log("Creating SSL connection to server...");
@@ -412,10 +445,10 @@ public final class Main implements Runnable {
 	    reconnect();
 	}
 	/*		catch (Exception | Error e) {
-	 * log("FAILED to connect to server, cannot continue!");
-	 * logError(e);
-	 * System.exit(1);
-	 * }*/
+	* log("FAILED to connect to server, cannot continue!");
+	* logError(e);
+	* System.exit(1);
+	* }*/
 	if (isConnected()) {
 	    this.connectionRetries = 0;
 	    log("Connected to server "+config.getProperty("server")+":"+config.getProperty("port")+".");
@@ -426,13 +459,13 @@ public final class Main implements Runnable {
 	    
 	    String line = "";
 	    try {
-		Protocol protocol = new Protocol();
+		this.protocol = new Protocol();
 		ial.clearIAL();
 		while ((line = in.readLine()) != null && this.engineRunning && !this.engineThread.isInterrupted()) {
 		    getProfiler().startSection("Incoming");
 		    addReceivedBytes(line.getBytes().length);
 		    try {
-			protocol.parse(line, this);
+			this.protocol.parse(line, this);
 		    }
 		    catch (Throwable e) {
 			log("Encountered a fatal error!");
@@ -499,6 +532,7 @@ public final class Main implements Runnable {
 	    if (!isConnected() && !sendIfNotConnected) {
 		log("Tried to send message while offline, queuing for sending when (if) we reconnect.");
 		this.offlineMessages.add(new OfflineMessage(data, log, sendIfNotConnected));
+		saveOfflineMessages();
 		engine.getProfiler().end();
 		return;
 	    }
@@ -534,6 +568,24 @@ public final class Main implements Runnable {
 	} catch (IOException e) {
 	    log("Couldn't send data to socket!");
 	    logError(e);
+	    if (e.getMessage().equals("Connection closed by remote host")) {
+		log("Storing the data that was attempted to be sent to be sent once (if) we reconnect...");
+		this.offlineMessages.add(new OfflineMessage(data, log, sendIfNotConnected));
+		saveOfflineMessages();
+		log("Server disconnected us but left the connection open. Disconnecting and attempting to reestablish a connection.");
+		REQUESTED_QUIT = false;
+		this.protocol.handleDisconnect(this, "Connection was closed unexpectedly.");
+	    }
+	    else if (e.getMessage().equals("Unrecognized SSL message, plaintext connection?")) {
+		log("We appear to be using an SSL connection on a non-SSL port, let me fix that.");
+		config.put("ssl", "false");
+		REQUESTED_QUIT = false;
+		this.protocol.handleDisconnect(this, "Current connection does not support SSL.");
+	    }
+	    else {
+		REQUESTED_QUIT = false;
+		this.protocol.handleDisconnect(this, e.getMessage());
+	    }
 	}
 	engine.getProfiler().end();
     }
@@ -694,4 +746,61 @@ public final class Main implements Runnable {
 	return out;
     }
     
+    public CommandManager getCommandManager() {
+	return this.commandManager;
+    }
+    
+    public void sendCommandHelpReply(ICommandSender sender, String sendPrefix, String line) {
+	sendCommandReply(sender, sendPrefix, String.format(line, (sender instanceof Console ? "help" : ".help")));
+    }
+    
+    public void sendCommandReply(ICommandSender sender, String sendPrefix, String line) {
+	if (sender instanceof Console) {
+	    Pattern p = Pattern.compile("%([BUIRO]|C[1-2]|K[0-9](,[0-9])?)%");
+	    Matcher m = p.matcher(line);
+	    line = m.replaceAll("");
+	    System.err.println(line);
+	}
+	else {
+	    send(sendPrefix+" :"+line);
+	}
+	
+    }
+    
+    public void terminate() {
+	System.exit(0);
+    }
+    
+    public Protocol getProtocol() {
+	return this.protocol;
+    }
+    
+    public Twitter getTwitter() {
+	return this.twitter;
+    }
+    
+    public void saveOfflineMessages() {
+	try {
+	    File f = null;
+	    if ((f = new File("offlinemessages.iuc")).exists())
+		f.delete();
+	    FileWriter w = new FileWriter("offlinemessages.iuc", false);
+	    for (OfflineMessage om : this.offlineMessages)
+		w.write(om.getText()+"\0x01"+Boolean.toString(om.shouldLog())+"\0x01"+Boolean.toString(om.shouldSendWhenNotConnected())+"\n");
+	} catch (IOException ex) {
+	    log("Couldn't save offline messages to file.");
+	    logError(ex);
+	}
+    }
+    
+    public void loadOfflineMessages() {
+	Scanner s = new Scanner("offlinemessages.iuc");
+	while (s.hasNext()) {
+	    String[] a = s.nextLine().split("\0x01");
+	    OfflineMessage om = new OfflineMessage(a[0], Boolean.parseBoolean(a[1]), Boolean.parseBoolean(a[2]));
+	    this.offlineMessages.add(om);
+	}
+	s.close();
+	new File("offlinemessage.iuc").delete();
+    }
 }

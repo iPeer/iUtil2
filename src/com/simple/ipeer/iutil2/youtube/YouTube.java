@@ -44,6 +44,7 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
     private boolean hasStarted = false;
     private static YouTube youtubeInstance;
     private boolean isSyncing = false;
+    private boolean startingDead = false;
     private long lastForcedUpdate = 0L;
     private Throwable lastException;
     private long lastExceptionTime = 0L;
@@ -82,6 +83,11 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	    settings.put("youtubeMaxSearchResults",  "1");
 	    settings.put("youtubeSearchFormat", "%C1%[%C2%%AUTHOR%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] %DASH% %C2%%VIDEOURL%");
 	    settings.put("youtubeCountryCode", "GB");
+	    
+	    // Other settings
+	    
+	    settings.put("youtubeRestartDeadThreads", "true");
+	    settings.put("youtubeChannelUpdateTimeout", "5000");
 	    
 	    
 	    engine.createConfigDefaults(settings);
@@ -175,11 +181,13 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
     public boolean addUser(String name) {
 	if (this.CHANNEL_LIST.containsKey(name.toLowerCase()))
 	    return false;
-	YouTubeChannel a = new YouTubeChannel(name, engine, this);
-	announcerList.add(a);
-	a.setSyncing(true);
 	try {
+	    YouTubeChannel a = new YouTubeChannel(name, engine, this);
+	    announcerList.add(a);
+	    a.setSyncing(true);
 	    a.update();
+	    this.CHANNEL_LIST.put(name.toLowerCase(), a);
+	    this.waitingToSync.add(a);
 	} catch (Throwable ex) {
 	    lastException = ex;
 	    lastExceptionTime = System.currentTimeMillis();
@@ -187,8 +195,6 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	    engine.logError(ex, "YouTube", name);
 	    throw new RuntimeException("Couldn't add user to watch list: "+ex.toString()+" @ "+ex.getStackTrace()[0]);
 	}
-	this.CHANNEL_LIST.put(name.toLowerCase(), a);
-	this.waitingToSync.add(a);
 	saveChannels();
 	if (engine != null)
 	    engine.log("User "+name+" succesfully added to users list and is waiting to sync.", "YouTube");
@@ -293,6 +299,54 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	return data;
     }
     
+        public static void main(String[] args) {
+	    
+	    YouTube y = new YouTube(null);
+	    HashMap<String, String> a = y.getPlaylistInfo("PLFBE-zpkRFKQJhfOlW7XABazzbUouc-XV");
+	    
+	    for (String b : a.keySet())
+		System.err.println(b+": "+a.get(b));
+	
+//	try {
+//	    YouTube y = new YouTube(null);
+//	    HashMap<String, String> a = y.getVideoInfo("kMu9cAK2pwo");
+//	    for (String b : a.keySet()) {
+//		System.err.println(b+": "+a.get(b));
+//	    }
+//	} catch (Throwable e) {
+//	    e.printStackTrace();
+//	}
+	
+    }
+    
+    public HashMap<String, String> getPlaylistInfo(String plID) {
+	HashMap<String, String> data = new HashMap<String, String>();
+	try {
+	    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+	    String URL = "https://gdata.youtube.com/feeds/api/playlists/"+plID+"?v=2";
+	    DocumentBuilder a = f.newDocumentBuilder();
+	    Document doc = a.newDocument();
+	    doc = a.parse(URL);
+	    Element e = doc.getDocumentElement();
+	    e.normalize();
+	    
+	    String playlistAuthor = ((Element)e.getElementsByTagName("author").item(0).getChildNodes()).getElementsByTagName("name").item(0).getChildNodes().item(0).getNodeValue();
+	    String playlistName =  e.getElementsByTagName("title").item(0).getChildNodes().item(0).getNodeValue();
+	    String numVideos = e.getElementsByTagName("openSearch:totalResults").item(0).getChildNodes().item(0).getNodeValue();
+	    
+	    data.put("playlistAuthor", playlistAuthor);
+	    data.put("playlistName", Matcher.quoteReplacement(playlistName));
+	    data.put("videoCount", numVideos);
+	    data.put("playlistID", plID);
+	    
+	} catch (Throwable ex) {
+	    engine.logError(ex, "YouTube", plID);
+	    data.put("error", "Couldn't acquire data for playlist ID '"+plID+"' ("+ex.getClass()+(ex.getClass().toString().equals("class java.io.FileNotFoundException") ? " / Invalid Playlist" : "")+")");
+	    data.put("errorTrace", ex.toString()+" @ "+ex.getStackTrace()[0]);
+	}
+	return data;
+    }
+    
     public String formatTime(String seconds) {
 	return formatTime(Integer.valueOf(seconds));
     }
@@ -377,20 +431,6 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	return youtubeInstance;
     }
     
-    public static void main(String[] args) {
-	
-	try {
-	    YouTube y = new YouTube(null);
-	    HashMap<String, String> a = y.getVideoInfo("kMu9cAK2pwo");
-	    for (String b : a.keySet()) {
-		System.err.println(b+": "+a.get(b));
-	    }
-	} catch (Throwable e) {
-	    e.printStackTrace();
-	}
-	
-    }
-    
     public void syncChannelsIfNotSyncing() {
 	if (!waitingToSync.isEmpty() && !isSyncing) {
 	    isSyncing = true;
@@ -424,6 +464,19 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	return x;
     }
     
+    public void restartDeadThreads() {
+	if (engine.config.getProperty("youtubeRestartDeadThreads", "true").equals("true") && getDeadThreads() > 0 && !startingDead) {
+	    startingDead = true;
+	    for (YouTubeChannel a : this.CHANNEL_LIST.values())
+		if (a.isDead()) {
+		    a.stopIfRunning();
+		    a.startIfNotRunning();
+		}
+	    startingDead = false;
+	    
+	}
+    }
+    
     @Override
     public int getTotalThreads() {
 	return CHANNEL_LIST.size();
@@ -447,7 +500,7 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
     public long getLastUpdateTime() {
 	return lastForcedUpdate;
     }
-
+    
     @Override
     public List<Announcer> getAnnouncerList() {
 	return announcerList;

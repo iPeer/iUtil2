@@ -66,9 +66,12 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable, Debug
 	services.put("Yggdrasil Auth", new MinecraftService("https://authserver.mojang.com/"));
 	services.put("Login", new MinecraftLoginService("https://login.minecraft.net/", this));
 	services.put("Session", new MinecraftService("https://session.minecraft.net/game/checkserver.jsp"));
+	services.put("Textures", new MinecraftService("http://textures.minecraft.net:8080/"));
+	//services.put("Multiplayer Sessions", new MinecraftService("https://session.minecraft.net/game/checkserver.jsp"));
+	//services.put("Realms", new MinecraftService(""));
 	for (IMinecraftService b : services.values())
 	    announcerList.add((Announcer)b);
-	    
+	
 	startupTime = System.currentTimeMillis();
 	
     }
@@ -96,6 +99,9 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable, Debug
 			(data.containsKey("status") && data.get("status").equals("200") ? "up" : "down")+"\01"+
 			(data.containsKey("errorMessage") ? data.get("errorMessage") : data.get("status"))+"\n";
 		statusData.put(key, data);
+//		if (engine == null || engine.config.get("debug").equals("true"))
+//		    for (String a : statusData.keySet())
+//			System.err.println(a+": "+statusData.get(a));
 	    } catch (Exception e) { }
 	}
 	try {
@@ -176,32 +182,32 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable, Debug
     public HashMap<String, HashMap<String, String>> getStatusData() {
 	return this.statusData;
     }
-
+    
     @Override
     public int getDeadThreads() {
 	return (timeTilUpdate() < 0 ? 1 : 0);
     }
     
-    	@Override
-	public int getTotalThreads() {
-	    return 1;
-	}
-
+    @Override
+    public int getTotalThreads() {
+	return 1;
+    }
+    
     @Override
     public List<Announcer> getAnnouncerList() {
 	return announcerList;
     }
-
+    
     @Override
     public Throwable getLastExeption() {
 	return lastException;
     }
-
+    
     @Override
     public long getLastExceptionTime() {
 	return lastExceptionTime;
     }
-
+    
     @Override
     public long getLastUpdateTime() {
 	return lastUpdate;

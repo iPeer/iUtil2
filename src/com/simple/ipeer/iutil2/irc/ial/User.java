@@ -1,6 +1,8 @@
 package com.simple.ipeer.iutil2.irc.ial;
 
-public class User {
+import com.simple.ipeer.iutil2.commands.base.ICommandSender;
+
+public class User implements ICommandSender {
 
 	private String nick, address, ident, usermodes = "";
 	
@@ -65,5 +67,15 @@ public class User {
 	public void setModes(String modes) {
 		this.usermodes = modes;
 	}
+
+    @Override
+    public String getIdentd() {
+	return getIdent();
+    }
+
+    @Override
+    public String getAddress() {
+	return address();
+    }
 	
 }

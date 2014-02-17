@@ -1,29 +1,20 @@
 package com.simple.ipeer.iutil2.irc.protocol;
 
+import com.simple.ipeer.iutil2.commands.base.CommandException;
+import com.simple.ipeer.iutil2.commands.base.CommandNotFoundException;
+import com.simple.ipeer.iutil2.commands.base.InsufficientPermissionsException;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Properties;
-
-import javax.xml.parsers.ParserConfigurationException;
-
-import org.xml.sax.SAXException;
 
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.ial.User;
-import com.simple.ipeer.iutil2.minecraft.servicestatus.MinecraftServiceStatus;
-import com.simple.ipeer.iutil2.util.Filesize;
+import com.simple.ipeer.iutil2.twitter.Twitter;
 import com.simple.ipeer.iutil2.youtube.YouTube;
-import com.simple.ipeer.iutil2.youtube.YouTubeSearchResult;
-import java.io.File;
 import java.io.FileWriter;
-import java.util.Iterator;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.regex.Matcher;
 
 public class Protocol {
     
@@ -32,7 +23,7 @@ public class Protocol {
     public void handleDisconnect(Main engine, String message)  {
 	engine.log("Disconnected! "+message);
 	if (engine.REQUESTED_QUIT)
-	    System.exit(0);
+	    engine.terminate();
 	else
 	    engine.reconnect();
     }
@@ -61,6 +52,20 @@ public class Protocol {
 	
 	else if (line.split(" ")[1].equals("001")) // Server address
 	    engine.CURRENT_SERVER = line.split(" ")[0].substring(1);
+	
+	else if (line.split(" ")[1].equals("010")) { // "please use this server instead"
+	    engine.log("The server is asking us to use a differet address and/or port.", "Protocol");
+	    String[] a = line.split(" ");
+	    String s = a[3];
+	    String p = a[4];
+	    engine.log(String.format("Switching to %s:%s on request of the server.", s, p), "Protocol");
+	    engine.config.put("server", s);
+	    engine.config.put("port", p);
+	    engine.log("SSL has been disabled as it is not known if the port specified maps to SSL.", "Protocol");
+	    engine.config.put("ssl", "false");
+//	    engine.REQUESTED_QUIT = false;
+//	    handleDisconnect(engine, "Using alternate server/port combo as per server's request.");
+	}
 	
 	else if (line.split(" ")[1].equals("005")) {	// Network settings
 	    if (engine.NETWORK_SETTINGS == null)
@@ -165,327 +170,45 @@ public class Protocol {
 	    if ((engine == null ? "@#.!" : engine.config.getProperty("commandCharacters")).contains(message.substring(0, 1))) {
 		engine.getProfiler().start("Commands");
 		String sendPrefix = ((engine == null ? "#@" : engine.config.getProperty("publicCommandCharacters")).contains(message.substring(0, 1)) ? "PRIVMSG "+channel : "NOTICE "+nick);
-		String commandPrefix = message.substring(0, 1);
-		boolean isAdmin = engine == null || engine.getIAL().userHasModes(nick, engine.config.getProperty("debugChannel"), "o");
+//		String commandPrefix = message.substring(0, 1);
+//		boolean isAdmin = engine == null || engine.getIAL().userHasModes(nick, engine.config.getProperty("debugChannel"), "o");
 		String commandName = message.split(" ")[0].substring(1).toLowerCase();
 		
-		if (commandName.matches("(q{3}|quit|die)") && isAdmin) {
-		    String quitMessage = engine.config.getProperty("quitMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address);
-		    engine.quit(quitMessage);
-		}
-		
-		else if (commandName.equals("throwexception") && isAdmin) {
-		    engine.logError(new Exception("Forced debug exception"), "DEBUG");
-		}
-		
-		else if (commandName.matches("force(y(ou)?t(ube)?)?update") && isAdmin) {
-		    final String fSendPrefix = sendPrefix;
-		    new Thread(
-			    new Runnable() {
-				public void run() {
-				    engine.send(fSendPrefix+" :Updating all YouTube threads...");
-				    long start = System.currentTimeMillis();
-				    engine.getAnnouncers().get("YouTube").updateAll();
-				    engine.send(fSendPrefix+" :Finished updating all YouTube threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
-				}
-			    }).start();
-		}
-		
-		else if (commandName.equals("forcetwitchupdate") && isAdmin) {
-		    final String fSendPrefix = sendPrefix;
-		    new Thread(
-			    new Runnable() {
-				public void run() {
-				    engine.send(fSendPrefix+" :Updating all Twitch threads...");
-				    long start = System.currentTimeMillis();
-				    engine.getAnnouncers().get("Twitch").updateAll();
-				    engine.send(fSendPrefix+" :Finished updating all Twitch threads. Update took "+(System.currentTimeMillis() - start)+"ms.");
-				}
-			    }).start();
-		}
-		
-		else if (commandName.equals("profiler")) {
-		    if (message.split(" ").length > 1) {
-			String parameter = message.split(" ")[1];
-			if (engine.getProfiler().profileData().containsKey(parameter))
-			    engine.send(sendPrefix+" :Last iteration of '%B%"+parameter+"%B%' took "+engine.getProfiler().profileData().get(parameter) / 1000000.0D+ "ms.");
-			else
-			    engine.send(sendPrefix+" :'%B%"+parameter+"%B%' has been iterated upon yet.");
-		    }
-		}
-		
-		else if (commandName.equals("reloadconfig") && isAdmin) {
-		    engine.send(sendPrefix+" :Attempting to reload config...");
-		    Properties oldConfig = engine.config; // In case it fails.
-		    try {
-			engine.config.clear();
-			engine.loadConfig();
-			engine.send(sendPrefix+" :Reloaded config succesfully. Some changes may not take effect immediately.");
-		    } catch (Exception e) {
-			engine.config = oldConfig;
-			engine.send(sendPrefix+" :Could reload config: "+e.toString()+" at "+e.getStackTrace()[0]);
-			engine.logError(e);
-		    }
-		}
-		
-		else if (commandName.equals("part") && isAdmin) {
-		    try {
-			String partChannel = message.split(" ")[1];
-			if (engine.getIAL().getChannelList().containsKey(partChannel))
-			    engine.partChannel(partChannel, engine.config.getProperty("partMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address));
-			else
-			    engine.send(sendPrefix+" :I am not in that channel!");
-		    }
-		    catch (ArrayIndexOutOfBoundsException e) {
-			engine.partChannel(channel, engine.config.getProperty("partMessageFormat").replaceAll("%NICK%", nick).replaceAll("%ADDRESS%", address));
-		    }
-		}
-		
-		else if (commandName.equals("join") && isAdmin) {
-		    try {
-			engine.joinChannel(message.split(" ")[1]);
-		    }
-		    catch (ArrayIndexOutOfBoundsException e) {
-			engine.send(sendPrefix+" :Invalid syntax! "+commandPrefix+commandName+" <channel>");
-		    }
-		    
-		}
-		
-		else if (commandName.matches("(info(r?mation)?|status)") && isAdmin) {
-		    engine.send(sendPrefix, engine.generateInfoOutput(), true, false);
-		}
-		
-		else if (commandName.equals("reconnect") && isAdmin) {
-		    engine.quit("RECONNECT requested by "+nick, true);
-		}
-		
-		else if (commandName.equals("send") && isAdmin) {
-		    String toSend = message.substring(6);
-		    if (toSend.substring(0,  4).toLowerCase().equals("nick"))
-			engine.changeNick(toSend.substring(5));
+		try {
+		    User userObject = engine.getIAL().getFirstValidOrNewUserObject(nick);
+		    if (message.split(commandName+" ").length > 1)
+			engine.getCommandManager().executeCommand(commandName, userObject, line, sendPrefix, message.split(commandName+" ")[1]);
 		    else
-			engine.send(message.substring(6));
-		}
+			engine.getCommandManager().executeCommand(commandName, userObject, line, sendPrefix);
 		
-		else if (commandName.equals("config") && isAdmin) {
-		    String d[] = message.split(" ");
-		    if (d.length == 1) {
-			engine.send(sendPrefix+" :Invalid syntax, must provide at least a config entry.");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <entry> [value]");
-		    }
-		    else {
-			String entry = d[1];
-			if (engine.config.containsKey(entry)) {
-			    engine.disableFormatProcessing();
-			    if (d.length >= 3) {
-				String oldValue = engine.config.getProperty(entry);
-				String newValue = "";
-				for (int x = 2; x < d.length; x++)
-				    newValue = newValue+(newValue.length() > 0 ? " " : "")+d[x];
-				engine.config.put(entry, newValue);
-				engine.send(sendPrefix+" :Config entry "+entry+" has been changed from "+oldValue+" to "+newValue+".");
-				engine.saveConfig();
-			    }
-			    else {
-				engine.send(sendPrefix+" :Config entry "+entry+" is current set as "+engine.config.getProperty(entry));
-			    }
-			    engine.enableFormatProcessing();
-			}
-			else {
-			    engine.send(sendPrefix+" :Config entry "+entry+" doesn't exist!");
-			}
-		    }
+		} catch (CommandException e) {
+		    engine.sendCommandHelpReply(engine.getIAL().getUser(channel.toLowerCase(), nick), sendPrefix, e.getMessage());
 		}
-		
-		else if (commandName.matches("addy(ou)?t(ube)?(user(name)?)?") && isAdmin) {
-		    try {
-			String user = message.split(" ")[1];
-			if (engine.getAnnouncers().get("YouTube").addUser(user))
-			    engine.send(sendPrefix+" :Now watching "+user+" for YouTube uploads.");
-			else
-			    engine.send(sendPrefix+" :"+user+" is already being watched for uploads!");
-		    }
-		    catch (ArrayIndexOutOfBoundsException e) {
-			engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to add.");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
-		    }
+		catch (InsufficientPermissionsException e) {
+		    engine.send(sendPrefix+" :You do not have the correct permissions to use this command.");
 		}
-		else if (commandName.matches("(rem(ove)?|del(ete)?)y(ou)?t(ube)?(user(name)?)?") && isAdmin) {
-		    try {
-			String user = message.split(" ")[1];
-			if (engine.getAnnouncers().get("YouTube").removeUser(user))
-			    engine.send(sendPrefix+" :No longer watching "+user+" for YouTube uploads.");
-			else
-			    engine.send(sendPrefix+" :"+user+" isn't being watched for uploads.");
-		    }
-		    catch (ArrayIndexOutOfBoundsException e) {
-			engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to remove.");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
-		    }
-		}
-		
-		else if (commandName.matches("addtwitch(user(name)?)?") && isAdmin) {
-		    try {
-			String user = message.split(" ")[1];
-			if (engine.getAnnouncers().get("Twitch").addUser(user))
-			    engine.send(sendPrefix+" :Now watching "+user+" for streams.");
-			else
-			    engine.send(sendPrefix+" :"+user+" is already being watched for streams!");
-		    }
-		    catch (ArrayIndexOutOfBoundsException e) {
-			engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to add.");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
-		    }
-		}
-		else if (commandName.matches("(rem(ove)?|del(ete)?)twitch(user(name)?)?") && isAdmin) {
-		    try {
-			String user = message.split(" ")[1];
-			if (engine.getAnnouncers().get("Twitch").removeUser(user))
-			    engine.send(sendPrefix+" :No longer watching "+user+" for streams.");
-			else
-			    engine.send(sendPrefix+" :"+user+" isn't being watched for streams.");
-		    }
-		    catch (ArrayIndexOutOfBoundsException e) {
-			engine.send(sendPrefix+" :Incorrect syntax, must supply a channel to remove.");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <channel>");
-		    }
-		}
-		
-		else if (commandName.matches("^(memo|tell)")) {
-		    if (message.split(" ").length < 3) {
-			engine.send(sendPrefix+" :You need to provide a nick to send the message to and the message you want to send them.");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <nick> <message>");
-		    }
-		    else {
-			String n = message.split(commandName+" ")[1].split(" ")[0];
-			String msg = message.split(n+" ")[1];
-			if (engine.getIAL().isOnChannel(n, channel) && !n.equals(nick))
-			    engine.send(sendPrefix+" :Why not tell them yourself? They're on this very channel right now!");
-			else {
-			    try {
-				engine.getTell().addMessage(nick, n, msg);
-				engine.send(sendPrefix+" :"+(n.equals(nick) ? "Trying to send a message to your future self eh, "+nick+"? Very well, it is done." : "I'll be sure to tell "+n+" that next time I see them, "+nick+"."));
-			    }
-			    catch (RuntimeException e) {
-				engine.send(sendPrefix+" :"+e.getMessage());
-			    }
-			}
-		    }
-		    
-		}
-		
-		else if (commandName.matches("(cancel|del(ete)?|remove)(memo|tell)")) {
-		    if (message.split(" ").length < 2) {
-			engine.send(sendPrefix+" :You need to provide a nick of whom you wish to cancel your last message for.");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <nick>");
-		    }
-		    else {
-			String n = message.split(commandName+" ")[1].split(" ")[0];
-			try {
-			    engine.getTell().cancelMessage(nick, n);
-			    engine.send(sendPrefix+" :You last message to "+n+" has been cancelled.");
-			}
-			catch (RuntimeException e) {
-			    engine.send(sendPrefix+" :"+e.getMessage());
-			}
-		    }
-		}
-		
-		else if (commandName.matches("m(ine)?c(raft)?(services?)?status")) {
-		    MinecraftServiceStatus mcss = (MinecraftServiceStatus)engine.getAnnouncers().get("Minecraft Service Status");
-		    String out = "";
-		    HashMap<String, HashMap<String, String>> statusData = mcss.getStatusData();
-		    for (Iterator<String> it = statusData.keySet().iterator(); it.hasNext();) {
-			String key = it.next();
-			String ping = statusData.get(key).get("ping");
-			String status = statusData.get(key).get("status");
-			String errorMessage = "";
-			if (statusData.get(key).containsKey("errorMessage"))
-			    errorMessage = statusData.get(key).get("errorMessage");
-			String colourPrefix = (!errorMessage.equals("") || !status.equals("200") ? "%K04%" : (Integer.valueOf(ping) > 1500 ? "%K08%" : "%K03%"));
-			out += (out.length() > 0 ? "%C1%, " : "")+colourPrefix+key+" ("+(errorMessage.equals("") ? ping+"ms" : errorMessage)+")";
-		    }
-		    engine.send(sendPrefix+" :"+out);
-		}
-		
-		else if (commandName.matches("y(ou)?t(ube)?(search)?")) {
-		    engine.getProfiler().start("YTSearch");
-		    try {
-			String query = message.substring(commandName.length() + 2);
-			List<YouTubeSearchResult> results = (engine == null ? new YouTube(null) : (YouTube)engine.getAnnouncers().get("YouTube")).getSearchResults(query);
-			int result = 0;
-			for (YouTubeSearchResult r : results) {
-			    result++;
-			    String out = engine.config.getProperty("youtubeSearchFormat")
-				    .replaceAll("%RESULT%", Integer.toString(result))
-				    /*.replaceAll("%(TOTAL)?RESULTS%", Integer.toString(r.getTotalResults()))*/
-				    .replaceAll("%(USER|(VIDEO)?AUTHOR)%", r.getAuthor())
-				    .replaceAll("%(VIDEO)?TITLE%", r.getTitle())
-				    .replaceAll("%(VIDEO)?LENGTH%", r.getFormattedLength())
-				    .replaceAll("%VIEWS%", Integer.toString(r.getViews()))
-				    .replaceAll("%COMMENTS%", Integer.toString(r.getComments()))
-				    .replaceAll("%LIKES%", Integer.toString(r.getLikes()))
-				    .replaceAll("%DISLIKES%", Integer.toString(r.getDislikes()))
-				    .replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+r.getID());
-			    engine.send(sendPrefix+" :"+out);
-			    if (engine.config.getProperty("youtubeSearchDescriptions").equals("true") && r.hasDescription())
-				engine.send(sendPrefix+" :"+engine.config.getProperty("youtubeInfoFormatDescription").replaceAll("%DESCRIPTION%", r.getDescription()));
-			}
-		    }
-		    catch (StringIndexOutOfBoundsException e) {
-			engine.send(sendPrefix+" :You must provide a search query!");
-			engine.send(sendPrefix+" :"+commandPrefix+commandName+" <query>");
-		    }
-		    catch (RuntimeException e) {
-			engine.send(sendPrefix+" :"+e.getMessage());
-		    }
-		    
-		    catch (SAXException | IOException | ParserConfigurationException e) {
-			engine.logError(e);
-			engine.send(sendPrefix+" :Couldn't get search results because an error occured. Please inform iPeer of this error:");
-			engine.send(sendPrefix+" :"+e.toString()+" at "+e.getStackTrace()[0]);
-		    }
-		    
-		    engine.getProfiler().end();
-		    
-		}
-		
-		else if (commandName.matches("myinfo|whoami")) {
-		    engine.send(sendPrefix+" :You are "+engine.getIAL().getUser(channel, nick).getFullAddress()+"."+(engine.getIAL().getUser(channel, nick).getModes().equals("") ? "" : " You have modes +"+engine.getIAL().getUser(channel, nick).getModes()));
-		}
-		
-		else if (commandName.matches("yourinfo|whoareyou") && isAdmin) {
-		    engine.send(sendPrefix+" :I am "+engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getFullAddress()+"."+(engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getModes().equals("") ? "" : " I have modes +"+engine.getIAL().getUser(channel, engine.getIAL().getCurrentNick()).getModes()));
-		}
-		
-		else if (commandName.equalsIgnoreCase("listthreads") && isAdmin) {
-		    ThreadGroup root = Thread.currentThread().getThreadGroup();
-		    ThreadGroup parent = root.getParent();
-		    File out = new File("./logs/threadlist-"+System.currentTimeMillis()+".txt");
-		    //FileWriter fw = null;
-		    try (FileWriter fw = new FileWriter(out)) {
-			listThreads(parent, "", fw);
-			fw.close();
-			engine.send(sendPrefix+" :Thread list dumped to "+out.getAbsoluteFile());
-		    } catch (IOException ex) {
-			engine.send(sendPrefix+" :Couldn't create thread list: "+ex.toString()+" @ "+ex.getStackTrace()[0]);
-		    }
-		}
-		else if (commandName.equalsIgnoreCase("dumpdebug") && isAdmin) {
-		    engine.send(sendPrefix+" :Creating debug dump...");
-		    try {
-			File a = new File((engine == null ? "logs/" : engine.logDir)+"/debug-"+System.currentTimeMillis()+".txt");
-			engine.getDebugger().writeDebug(new FileWriter(a));
-			engine.send(sendPrefix+" :Debug dump written to "+a.getAbsolutePath());
-		    }
-		    catch (Throwable e) {
-			engine.logError(e, "Debugger");
-			engine.log("Couldn't write debug dump.", "Debugger");
-			engine.send(sendPrefix+" :Couldn't create debug dump. See error log for details.");
-		    }
+		catch (CommandNotFoundException e) {
+		    // Silence this so we don't spam users with error messages should their messages start with any of the command characters.
 		}
 		
 		engine.getProfiler().end();
+	    }
+	    
+	    // YouTube Playlists 
+	    
+	    else if (message.matches(".*https?://(www.)?youtube.com/playlist\\?(p=||list=).*")) {
+		String playlistID = message.split("playlist\\?(p|list)=")[1].split("[\\.,!\"£\\$%\\^'@~/\\\\\\+\\*& ]")[0];
+		HashMap<String, String> plData = new HashMap<String, String>();
+		
+		if (!playlistID.equals("") && !(plData = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getPlaylistInfo(playlistID.split("[&\\?#]")[0])).isEmpty()) {
+		    String plOut = "";
+		    if (plData.containsKey("error"))
+			plOut = plData.get("error");
+		    else
+			plOut = "%C1%[%C2%"+plData.get("playlistAuthor")+"%C1%]%C2% "+plData.get("playlistName")+" %C1%(%C2%"+plData.get("videoCount")+" videos%C1%) %DASH%%C2% https://www.youtube.com/playlist?p="+plData.get("playlistID");
+		    engine.send("PRIVMSG "+channel+" :"+plOut);
+		}
+		
 	    }
 	    
 	    // YouTube Links
@@ -495,25 +218,39 @@ public class Protocol {
 		int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
 		int curVid = 1;
 		String[] vids = message.split("(.be/|v=)");
+		String[] playlists = message.split("[\\?&]list=");
 		for (int vn = 1; vn < vids.length && curVid++ <= maxVids; vn++) {
 		    String videoid = "";
+		    String playlistID = "";
 		    try {
-			videoid = vids[vn].split("[& ]")[0];
+			playlistID = playlists[vn].split("[\\.,!\"£\\$%\\^'@~/\\\\\\+\\*& ]")[0];
+		    } catch (ArrayIndexOutOfBoundsException e) { }
+		    try {
+			videoid = vids[vn].split("[\\.,!\"£\\$%\\^'@~/\\\\\\+\\*& ]")[0];
 		    } catch (ArrayIndexOutOfBoundsException e) { continue; }
 		    if (engine == null)
 			System.err.println(videoid);
 		    HashMap<String, String> ytdata = new HashMap<String, String>();
+		    HashMap<String, String> plData = new HashMap<String, String>();
 		    try {
 			ytdata = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getVideoInfo(videoid.split("[&\\?#]")[0]);
+			String plOut = "";
 			String out = (engine == null ? "%C1%[%C2%%USER%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] (%C2%%VIEWS%%C1% views, %C2%%COMMENTS%%C1% comments, %C2%%LIKES%%C1% likes, %C2%%DISLIKES%%C1% dislikes) %DASH% %VIDEOURL%" : engine.config.getProperty("youtubeInfoFormat"))
 				.replaceAll("%USER%", ytdata.get("author"))
-				.replaceAll("%(VIDEO)?TITLE%", ytdata.get("title"))
+				.replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(ytdata.get("title")))
 				.replaceAll("%(VIDEO)?LENGTH%", ytdata.get("duration"))
 				.replaceAll("%VIEWS%", ytdata.get("views"))
 				.replaceAll("%COMMENTS%", ytdata.get("comments"))
 				.replaceAll("%LIKES%", ytdata.get("likes"))
 				.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
 				.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
+			if (!playlistID.equals("")) {
+			    plData = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getPlaylistInfo(playlistID.split("[&\\?#]")[0]);
+			    if (plData.containsKey("error"))
+				plOut = plData.get("error");
+			    else
+				plOut = "%C1%Playlist: %C2%"+plData.get("playlistName")+" %C1%by %C2%"+plData.get("playlistAuthor")+" %C1%(%C2%"+plData.get("videoCount")+" videos%C1%) %DASH%%C2% https://www.youtube.com/playlist?p="+plData.get("playlistID");
+			}
 			if (engine != null)
 			    engine.send("PRIVMSG "+channel+" :"+out);
 			else
@@ -533,6 +270,11 @@ public class Protocol {
 				System.err.println(description.replaceAll("%C([0-9]+)?%", ""));
 			    else
 				engine.send("PRIVMSG "+channel+" :"+description);
+			    if (!(plOut == null || plOut.equals("")))
+							    if (engine == null)
+				System.err.println(plOut.replaceAll("%C([0-9]+)?%", ""));
+			    else
+				engine.send("PRIVMSG "+channel+" :"+plOut);
 			}
 		    } catch (IOException e) {
 			if (engine != null)
@@ -552,7 +294,25 @@ public class Protocol {
 		engine.getProfiler().end();
 	    }
 	    
+	    else if (message.matches(".*https?://(www.)?twitter.com/.*/status(es)?/.*")) { // Tweet links
+		String[] tweetIDs = message.split("/status(es)?/");
+		int maxTweets = 3;
+		Twitter t = engine.getTwitter();
+		for (int x = 1; (x + 1) <= tweetIDs.length && x <= maxTweets; x++) {
+		    try {
+			String id = tweetIDs[x].split("(/photo| )")[0];
+			String tweet = t.getTweetData(id);
+			engine.send("PRIVMSG "+channel+" :"+tweet);
+		    }
+		    catch (Throwable e) {
+			engine.logError(e);
+			engine.send("PRIVMSG "+channel+" :Couldn't get tweet data: "+e.toString());
+		    }
+		}
+	    }
+	    
 	}
+	
 	
 	else if (line.split(" ")[1].equals("NICK")) {
 	    engine.getProfiler().start("Nicks");

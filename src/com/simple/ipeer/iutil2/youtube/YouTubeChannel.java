@@ -24,6 +24,8 @@ import org.xml.sax.SAXException;
 import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class YouTubeChannel implements Announcer, Runnable, DebuggableSub {
     
@@ -120,7 +122,9 @@ public class YouTubeChannel implements Announcer, Runnable, DebuggableSub {
 	DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 	DocumentBuilder builder = factory.newDocumentBuilder();
 	Document doc = builder.newDocument();
-	doc = builder.parse("https://gdata.youtube.com/feeds/api/users/"+this.channelName+"/uploads");
+	HttpURLConnection conn = (HttpURLConnection)(new URL("https://gdata.youtube.com/feeds/api/users/"+this.channelName+"/uploads")).openConnection();
+	conn.setReadTimeout(Integer.parseInt(engine.config.getProperty("youtubeChannelUpdateTimeout", "5000")));
+	doc = builder.parse(conn.getInputStream());
 	Element element = doc.getDocumentElement();
 	element.normalize();
 	

@@ -171,5 +171,12 @@ public class IAL {
 	public HashMap<String, HashMap<String, User>> getChannelList() {
 		return this.CHANNEL_LIST;
 	}
+	
+	public User getFirstValidOrNewUserObject(String nick) {
+	    for (String c : getChannelList().keySet())
+		if (isOnChannel(nick, c))
+		    return getUser(c, nick);
+	    return new User(nick);
+	}
 
 }

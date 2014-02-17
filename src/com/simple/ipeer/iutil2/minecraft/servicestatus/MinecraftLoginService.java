@@ -7,6 +7,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ConnectException;
@@ -20,6 +21,7 @@ import java.security.NoSuchAlgorithmException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.HttpsURLConnection;
@@ -36,6 +38,10 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
     public MinecraftLoginService(String url, MinecraftServiceStatus mcss) {
 	super(url);
 	this.mcss = mcss;
+    }
+    
+    public static void main(String[] args) throws IOException {
+	new MinecraftLoginService(null, null).writeLogin("user", "pass");
     }
     
     @Override
@@ -66,10 +72,10 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
 	    BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
 	    line = in.readLine();
 	    //System.err.println(line);
-	    if (line.contains(":"))
-		this.mcss.setSSID(line.split(":")[3]); // Not actually used right now
-	    else
-		data.put("errorMessage", "Server gave an invalid response: "+line);
+//	    if (line.contains(":"))
+//		this.mcss.setSSID(line.split(":")[3]); // Not actually used right now
+//	    else
+//		data.put("errorMessage", "Server gave an invalid response: "+line);
 	    in.close();
 	    wr.close();
 	    data.put("status", Integer.toString(con.getResponseCode()));
@@ -121,6 +127,33 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
 	}
 	String[] s = {u, p};
 	return s;
+    }
+    
+    //Taken from iUtil1, hooray.
+    private void writeLogin(String u, String p) throws IOException {
+	DataOutputStream out = new DataOutputStream(new FileOutputStream(new File("./Minecraft/credentials.iaf")));
+	KeyGenerator kg;
+	Key key;
+	Cipher ci;
+	try {
+	    kg = KeyGenerator.getInstance("AES");
+	    kg.init(128);
+	    key = kg.generateKey();
+	    out.writeInt(key.getEncoded().length);
+	    ci = Cipher.getInstance("AES/ECB/PKCS5Padding");
+	    ci.init(Cipher.ENCRYPT_MODE, key);
+	    out.write(key.getEncoded());
+	    byte[] pass = ci.doFinal(p.getBytes());
+	    out.writeInt(pass.length);
+	    out.write(pass);
+	    byte[] user = ci.doFinal(u.getBytes());
+	    out.writeInt(user.length);
+	    out.write(user);
+	} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
+	    e.printStackTrace();
+	    out.close();
+	}
+	out.close();
     }
     
 }

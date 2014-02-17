@@ -15,10 +15,15 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.xml.parsers.ParserConfigurationException;
 import org.xml.sax.SAXException;
 
@@ -41,9 +46,14 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     private boolean serverStopped = false;
     
     public static void main(String[] args) {
-	AWeSomeChatTailer act = new AWeSomeChatTailer(null, "F:\\MC Server\\logs\\latest.log", "Test");
-	act.startIfNotRunning();
+	/*AWeSomeChatTailer act = new AWeSomeChatTailer(null, "F:\\MC Server\\logs\\latest.log", "Test");
+	act.startIfNotRunning();*/
+	Date d = new Date();
+	d.setTime(System.currentTimeMillis());
+	DateFormat df = SimpleDateFormat.getDateInstance();
+	System.err.println(df.format(d));
     }
+
     
     public AWeSomeChatTailer (Main engine, String file, String serverName) {
 	this(engine, new File(file), serverName);
@@ -103,33 +113,35 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    String line = "";
 	    boolean saveCache = false;
 	    while (this.isRunning && !thread.isInterrupted()) {
-		List<String> lines = Files.readAllLines(Paths.get(this.tailFile.getAbsolutePath()), (System.getProperty("os.name").equals("Linux") ? StandardCharsets.UTF_8 : StandardCharsets.ISO_8859_1));
-		//System.err.println(lines.size());
-		int x = Integer.parseInt(cache.getProperty("marker", "0"));
-		if (x > lines.size())
-		    x = 0;
-		for(; x < lines.size(); x++) {
-		    saveCache = true;
-		    try {
-			parseLine(lines.get(x));
-		    } catch (Throwable e) {
-			if (engine == null)
-			    e.printStackTrace();
-			else {
-			    engine.log("Unable to parse line.", "AWeSomeChat ("+this.serverName+")");
-			    engine.logError(e, "AWeSomeChat ("+this.serverName+")", line);
+		if (this.tailFile.exists()) {
+		    List<String> lines = Files.readAllLines(Paths.get(this.tailFile.getAbsolutePath()), (System.getProperty("os.name").equals("Linux") ? StandardCharsets.UTF_8 : StandardCharsets.ISO_8859_1));
+		    //System.err.println(lines.size());
+		    int x = Integer.parseInt(cache.getProperty("marker", "0"));
+		    if (x > lines.size())
+			x = 0;
+		    for(; x < lines.size(); x++) {
+			saveCache = true;
+			try {
+			    parseLine(lines.get(x));
+			} catch (Throwable e) {
+			    if (engine == null)
+				e.printStackTrace();
+			    else {
+				engine.log("Unable to parse line.", "AWeSomeChat ("+this.serverName+")");
+				engine.logError(e, "AWeSomeChat ("+this.serverName+")", line);
+			    }
 			}
-		    }
 //		    if (this.serverStopped) {
 //			cache.put("marker", "0");
 //			this.serverStopped = false;
 //		    }
 //		    else
-		}
-		if (saveCache) {
-		    saveCache = false;
-		    cache.put("marker", Integer.toString(lines.size()));
-		    cache.store(new FileOutputStream(markerFile), "");
+		    }
+		    if (saveCache) {
+			saveCache = false;
+			cache.put("marker", Integer.toString(lines.size()));
+			cache.store(new FileOutputStream(markerFile), "");
+		    }
 		}
 		this.lastUpdate = System.currentTimeMillis();
 		Thread.sleep(getUpdateDelay());
@@ -155,6 +167,11 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	//System.err.println(line);
 	if (line.length() == 0) { return; }
 	
+	Date d = new Date();
+	d.setTime(this.tailFile.lastModified()); // We use lastModified so the date is never in the future.
+	DateFormat df = SimpleDateFormat.getDateInstance();
+	String date = df.format(d);
+	
 	List<String> out = new ArrayList<String>();
 	List<String> logLines = new ArrayList<String>();
 	if (line.contains("[Server thread/INFO]: <")) { // Chat
@@ -166,10 +183,11 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		this.onlineUsers.add(user);
 		saveOnline();
 	    }
+	    if (message.startsWith("P ") || message.startsWith("PRIVATE ")) { return; }
 	    out.add((engine == null ? "%C2%%USER%%C1%: %MESSAGE%" : engine.config.getProperty("ascOutputFormat"))
 		    .replaceAll("%USER(NAME)?%", user)
-		    .replaceAll("%MESSAGE%", message));
-	    logLines.add(data[0]+" "+user+": "+message);
+		    .replaceAll("%MESSAGE%", Matcher.quoteReplacement(message)));
+	    logLines.add(data[0]+" "+user+": "+Matcher.quoteReplacement(message));
 	}
 	
 	else if (line.contains("left the game") || line.contains("joined the game")) { // (dis)connects
@@ -217,8 +235,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	
 	else if (line.contains("[Server thread/INFO]:") && onlineUsers.contains(stripCodes(line.split(" ")[3])) && !line.contains("lost connection")) { // Deaths
 	    String[] data = line.split(" ");
-	    String user = stripCodes(data[3]);
+	    String user = data[3];
+	    //System.out.println(user);
 	    String deathMessage = line.split(user+" ")[1];
+	    user = stripCodes(user);
 	    
 	    out.add((engine == null ? "%C2%%USER%%C1% %DEATHMESSAGE%" : engine.config.getProperty("ascOutputDeathFormat"))
 		    .replaceAll("%DEATHMESSAGE%", deathMessage)
@@ -286,7 +306,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 //		    writeToLog(line);
 //		else
 		for (Iterator<String> it = logLines.iterator(); it.hasNext();)
-		    writeToLog(it.next());
+		    writeToLog("["+date+"] "+it.next());
 	    
 	}
 	

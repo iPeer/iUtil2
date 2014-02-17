@@ -85,9 +85,9 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
 		    String[] players = q.getPlayers();
 		    apiString += q.getInetAddress().getAddress()+":"+q.getInetAddress().getPort();
 		    for (String k : data.keySet())
-			apiString += (apiString.length() > 0 ? "\01" : "")+k+":"+data.get(k);
+			apiString += (apiString.length() > 0 ? "\01" : "")+k+":"+data.get(k).replaceAll("\n", "{NEWLINE}");
 		    if (players.length > 0) {
-			apiString += "\01";
+			apiString += "\01players:";
 			for (int x = 0; x < players.length; x++)
 			    apiString += (x > 0 ? "," : "")+players[x];
 		    }
