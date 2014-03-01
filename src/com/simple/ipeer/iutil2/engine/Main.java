@@ -53,7 +53,7 @@ import java.util.regex.Pattern;
 
 public final class Main implements Runnable {
     
-    public final String BOT_VERSION = "0.714";
+    public final String BOT_VERSION = "0.716";
     
     private static final File DEFAULT_CONFIG_DIR = new File("./config");
     //private static final Server DEFAULT_SERVER = new Server("127.0.0.1", false, 6667);

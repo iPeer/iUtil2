@@ -21,13 +21,13 @@ public class CustomURLShortener {
     }
     
     public static void main(String[] args) throws IOException {
-	System.err.println(shorten("http://mc.auron.co.uk"));
+	System.err.println(shorten("http://mc.auron.co.uk", ""));
     }
     
-    public static String shorten(String URL) throws MalformedURLException, IOException {
+    public static String shorten(String URL, String cURL) throws MalformedURLException, IOException {
 	
 	String postURL = "http://ipeer.auron.co.uk/links/create";
-	String urlParams = "sessionID=s9A62CXMAv78rRFc1G77PO930&user=iUtil2&type=url&url="+URLEncoder.encode(URL, "UTF-8"); //TODO: Move the SID into a file at some point
+	String urlParams = "sessionID=s9A62CXMAv78rRFc1G77PO930&user=iUtil2&type=url&url="+URLEncoder.encode(URL, "UTF-8")+(cURL.length() > 1 ? "&customurl="+cURL : ""); //TODO: Move the SID into a file at some point
 	//System.out.println("Shortening link '"+URL+"'. urlParams: "+urlParams);
 	byte[] urlBytes = urlParams.getBytes(Charset.forName("UTF-8"));
 	URL request = new URL(postURL);

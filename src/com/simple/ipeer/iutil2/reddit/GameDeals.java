@@ -99,7 +99,7 @@ public class GameDeals implements Announcer, AnnouncerHandler, Runnable, Debugga
 			String saleURL = saleLinkData.substring(saleLinkData.lastIndexOf("\"") + 1, saleLinkData.length()).replaceAll("&amp;", "&");
 			if (saleURL.length() >= 60 && !link.equals(saleURL)) {
 			    try {
-				saleURL = CustomURLShortener.shorten(saleURL);
+				saleURL = CustomURLShortener.shorten(saleURL, linkData[linkData.length - 2]);
 			    }
 			    catch (Throwable ex) {
 			        saleURL = link;
