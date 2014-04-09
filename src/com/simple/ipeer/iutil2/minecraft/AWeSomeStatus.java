@@ -2,13 +2,15 @@ package com.simple.ipeer.iutil2.minecraft;
 
 import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
-import com.simple.ipeer.iutil2.engine.Debuggable;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
+import com.simple.ipeer.iutil2.engine.LogLevel;
 import com.simple.ipeer.iutil2.engine.Main;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -46,7 +48,7 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
 	s.put("asReportFailures", "false");
 	s.put("asIgnoreFailuresFrom", "auron.co.uk:35567");
 	s.put("asRereportFailuresAfter", "600000");
-	engine.createConfigDefaults(s);
+	engine.createConfigDefaults(s);	
     }
     
     public void start() {
@@ -67,6 +69,7 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
     public void run() {
 	this.engine.log("AWeSome server status thread is now running", "AWeSomeStatus");
 	while (this.isRunning && !this.thread.isInterrupted()) {
+	    String query = "";
 	    Set<String> servers = new HashSet<String>();
 	    List<String> noAnnounce = Arrays.asList(engine.config.getProperty("asIgnoreFailuresFrom").split(","));
 	    String[] server = (engine == null ? "127.0.0.1:35565" : engine.config.getProperty("asServers")).split(",");
@@ -83,14 +86,21 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
 		    q.sendQuery();
 		    Map<String, String> data = q.getData();
 		    String[] players = q.getPlayers();
-		    apiString += q.getInetAddress().getAddress()+":"+q.getInetAddress().getPort();
-		    for (String k : data.keySet())
-			apiString += (apiString.length() > 0 ? "\01" : "")+k+":"+data.get(k).replaceAll("\n", "{NEWLINE}");
+		    apiString += "'"+q.getInetAddress().getAddress()+":"+q.getInetAddress().getPort()+"'";
+		    for (String k : data.keySet()) {
+			if (k.equals("plitnum")) { continue; }
+			apiString += (apiString.length() > 0 ? "," : "")+"'"+(k.equals("ping") ? data.get(k).replaceAll("ms", "") : data.get(k)).trim().replaceAll("\n", "{NEWLINE}").replaceAll("'", "''")+"'";
+		    }
 		    if (players.length > 0) {
-			apiString += "\01players:";
+			apiString += ",'";
 			for (int x = 0; x < players.length; x++)
 			    apiString += (x > 0 ? "," : "")+players[x];
+			apiString += "'";
 		    }
+		    else {
+			apiString +=",NULL";
+		    }
+		    query = "UPDATE awesome_status SET (address, maxplayers, plugins, gametype, game_id, map, hostname, numplayers, ping, hostip, hostport, version, players, errormessage) =  ("+apiString+",NULL) WHERE servername = '"+serverNames.get(q.getAddress())+"'";
 //		    if (engine == null)
 //			System.err.println(apiString);
 //		    else
@@ -117,13 +127,29 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
 			    downServers.put(q.getAddress(), System.currentTimeMillis());
 			}
 		    }
-		    apiString = q.getInetAddress().getAddress()+":"+q.getInetAddress().getPort()+"\01"+e.toString();
+		    apiString = "'"+q.getInetAddress().getAddress()+":"+q.getInetAddress().getPort()+"','"+e.toString()+"'";
+		    query = "UPDATE awesome_status SET (address, errormessage) = ("+apiString+") WHERE servername = '"+serverNames.get(q.getAddress())+"'";
 //		    if (engine != null)
 //			engine.logError(e, "AWeSomeStatus", q.getAddress());
 		}
-		servers.add(apiString);
+		Statement s;
+		try {
+		    s = engine.getSQLConnection().createStatement();
+		    engine.log("SQL QUERY: "+query, "SQL", LogLevel.DEBUG_ONLY);
+		    s.executeUpdate(query);
+		    Main.statusUpdateTimeQ.setInt(1, (int)(System.currentTimeMillis() / 1000L));
+		    Main.statusUpdateTimeQ.setString(2, "awesome");
+		    Main.statusUpdateTimeQ.executeUpdate();
+
+		} catch (SQLException ex) {
+		    engine.logError(ex, "SQL", query);
+		    if (ex.getMessage().equals("This connection has been closed.")) {
+			engine.log("SQL Connection is no longer valid. Another will be created.", "SQL", LogLevel.LOG_AND_DEBUG);
+			engine.createSQLConnection();
+		    }
+		}
+		//servers.add(apiString);
 	    }
-	    writeAPI(servers);
 	    this.lastUpdate = System.currentTimeMillis();
 	    try {
 		Thread.sleep((engine == null ? 60000 : Long.valueOf(engine.config.getProperty("asUpdateDelay"))));

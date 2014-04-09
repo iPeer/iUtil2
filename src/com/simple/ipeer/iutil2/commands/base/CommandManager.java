@@ -18,6 +18,7 @@ import com.simple.ipeer.iutil2.commands.CommandQuit;
 import com.simple.ipeer.iutil2.commands.CommandReconnect;
 import com.simple.ipeer.iutil2.commands.CommandRegisterCommand;
 import com.simple.ipeer.iutil2.commands.CommandRegisterExternalCommands;
+import com.simple.ipeer.iutil2.commands.CommandSQL;
 import com.simple.ipeer.iutil2.commands.CommandSend;
 import com.simple.ipeer.iutil2.commands.CommandTell;
 import com.simple.ipeer.iutil2.commands.CommandTwitchUpdate;
@@ -68,6 +69,7 @@ public class CommandManager {
 	registerCommand(new CommandDelTell(), true);
 	registerCommand(new CommandExit(), true);
 	registerCommand(new CommandConfig(), true);
+	registerCommand(new CommandSQL(), true);
 		
     }
     

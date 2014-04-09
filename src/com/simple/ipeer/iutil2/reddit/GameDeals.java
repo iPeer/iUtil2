@@ -158,7 +158,7 @@ public class GameDeals implements Announcer, AnnouncerHandler, Runnable, Debugga
     
     @Override
     public long timeTilUpdate() {
-	return (lastUpdate + getUpdateDelay()) - System.currentTimeMillis();
+	return (this.lastUpdate + this.getUpdateDelay()) - System.currentTimeMillis();
     }
     
     @Override

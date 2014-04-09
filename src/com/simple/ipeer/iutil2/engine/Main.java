@@ -44,7 +44,12 @@ import com.simple.ipeer.iutil2.tell.Tell;
 import com.simple.ipeer.iutil2.twitch.Twitch;
 import com.simple.ipeer.iutil2.twitter.Twitter;
 import com.simple.ipeer.iutil2.util.Filesize;
+import com.simple.ipeer.iutil2.util.Util;
 import com.simple.ipeer.iutil2.youtube.YouTube;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -53,7 +58,7 @@ import java.util.regex.Pattern;
 
 public final class Main implements Runnable {
     
-    public final String BOT_VERSION = "0.716";
+    public final String BOT_VERSION = "763";
     
     private static final File DEFAULT_CONFIG_DIR = new File("./config");
     //private static final Server DEFAULT_SERVER = new Server("127.0.0.1", false, 6667);
@@ -67,6 +72,8 @@ public final class Main implements Runnable {
     public static final char HIGHLIGHT = 0x16;
     public static final char ENDALL = 0xF;
     public static final char DASH = 8212;
+    
+    public static PreparedStatement statusUpdateTimeQ;
     
     public Properties config = new Properties();
     public File configDir;
@@ -104,6 +111,9 @@ public final class Main implements Runnable {
     private IAL ial;
     private CommandManager commandManager;
     private Twitter twitter;
+    private Connection sqlConnection;
+    private HashMap<String, String> cmdLine;
+    private boolean creatingSQLConnection = false;
     
     
     public static void main(String[] args) {
@@ -116,7 +126,7 @@ public final class Main implements Runnable {
 	    }
 	    catch (ArrayIndexOutOfBoundsException e) {
 		System.err.println("Invalid command line parameter passed '"+c[0]+"', ignoring.");
-		continue;
+		//continue;
 	    }
 	}
 	
@@ -128,6 +138,8 @@ public final class Main implements Runnable {
     public Main(HashMap<String, String> args) {
 	
 	engine = this;
+	
+	this.cmdLine = args;
 	
 	// Handle config files and stuff, creating directories should they not exist.
 	//		if (!DEFAULT_CONFIG_DIR.exists())
@@ -205,9 +217,13 @@ public final class Main implements Runnable {
 	defaultConfig.put("debugChannel", "#peer.dev");
 	defaultConfig.put("profilingEnabled", "true");
 	defaultConfig.put("apiDataDir", "./api");
+	defaultConfig.put("sqlHostPort", "localhost:5432");
 	createConfigDefaults(defaultConfig);
 	
 	new File(config.getProperty("apiDataDir")).mkdirs();
+	
+	// Create the SQL Database connection
+	createSQLConnection();
 	
 	// Announcers and other threads that should run while the bot is
 	
@@ -719,6 +735,7 @@ public final class Main implements Runnable {
 	long freeMemory = Runtime.getRuntime().freeMemory();
 	long usedMemory = totalMemory - freeMemory;
 	List<String> out = new ArrayList<String>();
+	out.add("iUtil Build #"+BOT_VERSION);
 	out.add("Memory: "+(usedMemory / 1024L / 1024L)+"MB/"+(totalMemory / 1024L / 1024L)+"MB");
 	String threads = "";
 	for (String a : engine.getAnnouncers().keySet()) {
@@ -768,6 +785,9 @@ public final class Main implements Runnable {
     }
     
     public void terminate() {
+	try {
+	    getSQLConnection().close();
+	} catch (SQLException ex) { }
 	System.exit(0);
     }
     
@@ -802,5 +822,40 @@ public final class Main implements Runnable {
 	}
 	s.close();
 	new File("offlinemessage.iuc").delete();
+    }
+    
+    public void setSQLConnection(Connection c) {
+	this.sqlConnection = c;
+    }
+    
+    public Connection getSQLConnection() {
+	return this.sqlConnection;
+    }
+    
+    public void createSQLConnection() {
+	if (!this.creatingSQLConnection) {
+	    this.creatingSQLConnection = true;
+	    log("Creating SQL connection.", "SQL", LogLevel.LOG_AND_DEBUG);
+	    Properties p = new Properties();
+	    p.put("user", "iPeer");
+	    p.put("password", Util.readEncrypted(new File("./sql/pwd")));
+	    p.put("logUnclosedConnections", "true");
+	    p.put("tcpKeepAlive", "true");
+	    //p.put("loglevel", "2");
+//	if (cmdLine.get("sqlUseSSL").equals("true"))
+//	    p.put("ssl", "true");
+	    Connection c = null;
+	    try {
+		c = DriverManager.getConnection("jdbc:postgresql://"+config.getProperty("sqlHostPort", "localhost:5432")+"/iPeer", p);
+		log("Succesfully created SQL connection.", "SQL", LogLevel.LOG_AND_DEBUG);
+		statusUpdateTimeQ = c.prepareStatement("UPDATE update_times SET time = ? WHERE name = ?");
+	    } catch (SQLException ex) {
+		logError(ex, "SQL");
+		log("FATAL: Couldn't acquire connection to SQL server. Terminating.", "SQL", LogLevel.LOG_AND_DEBUG);
+		System.exit(1);
+	    }
+	    setSQLConnection(c);
+	    this.creatingSQLConnection = false;
+	}
     }
 }

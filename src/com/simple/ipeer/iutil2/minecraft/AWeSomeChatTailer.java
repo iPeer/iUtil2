@@ -15,15 +15,19 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.xml.parsers.ParserConfigurationException;
 import org.xml.sax.SAXException;
 
@@ -44,6 +48,9 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     private Throwable lastException;
     private long lastExceptionTime = 0L;
     private boolean serverStopped = false;
+    private int serverID = 0;
+    
+    private PreparedStatement sqlQ;
     
     public static void main(String[] args) {
 	/*AWeSomeChatTailer act = new AWeSomeChatTailer(null, "F:\\MC Server\\logs\\latest.log", "Test");
@@ -53,16 +60,17 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	DateFormat df = SimpleDateFormat.getDateInstance();
 	System.err.println(df.format(d));
     }
-
     
-    public AWeSomeChatTailer (Main engine, String file, String serverName) {
-	this(engine, new File(file), serverName);
+    
+    public AWeSomeChatTailer (Main engine, String file, String serverName, int id) {
+	this(engine, new File(file), serverName, id);
     }
     
-    public AWeSomeChatTailer (Main engine, File file, String serverName) {
+    public AWeSomeChatTailer (Main engine, File file, String serverName, int id) {
 	this.engine = engine;
 	this.tailFile = file;
 	this.serverName = serverName;
+	this.serverID = id;
 	
 	this.cacheDir = new File("./AWeSome/chat/"+this.serverName.toLowerCase());
 	if (!this.cacheDir.exists())
@@ -173,9 +181,24 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	String date = df.format(d);
 	
 	List<String> out = new ArrayList<String>();
-	List<String> logLines = new ArrayList<String>();
+	List<String> sqlData = new ArrayList<String>();
+	
+	String[] data = line.split(" ");
+	
+	// Construct a Unix timestamp from the date of the message.
+	
+	df = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
+	Date d2;
+	long messageTime = 0L;
+	try {
+	    d2 = df.parse(date+" "+data[0].substring(1, data[0].length() - 1));
+	    messageTime = d2.getTime() / 1000L;
+	} catch (ParseException ex) {
+	    Logger.getLogger(AWeSomeChatTailer.class.getName()).log(Level.SEVERE, null, ex);
+	    messageTime = System.currentTimeMillis() / 1000L;
+	}
+	
 	if (line.contains("[Server thread/INFO]: <")) { // Chat
-	    String[] data = line.split(" ");
 	    String user = data[3].replaceAll("[\\<\\>]", "");
 	    String message = line.split(user+"> ")[1];
 	    user = stripCodes(user);
@@ -187,11 +210,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1%: %MESSAGE%" : engine.config.getProperty("ascOutputFormat"))
 		    .replaceAll("%USER(NAME)?%", user)
 		    .replaceAll("%MESSAGE%", Matcher.quoteReplacement(message)));
-	    logLines.add(data[0]+" "+user+": "+Matcher.quoteReplacement(message));
+	    sqlData.add(user+"\01"+message+"\01"+1+"\01"+messageTime);
 	}
 	
 	else if (line.contains("left the game") || line.contains("joined the game")) { // (dis)connects
-	    String[] data = line.split(" ");
 	    String type = data[4];
 	    String user = stripCodes(data[3]);
 	    
@@ -205,11 +227,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 		    .replaceAll("%TYPE%", type)
 		    .replaceAll("%USER(NAME)?%", user));
-	    logLines.add(data[0]+" "+user+" "+type+" the game.");
+	    sqlData.add(user+"\01"+(type.equals("joined") ? "joined the game." : "left the game")+"\01"+2+"\01"+messageTime);
 	}
 	
 	else if (line.contains("[Server thread/INFO]: *")) { // Actions
-	    String[] data = line.split(" ");
 	    String user = data[4];
 	    String message = line.split(user+" ")[1];
 	    user = stripCodes(user);
@@ -219,22 +240,20 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%* %USER%%C1% %ACTION%" : engine.config.getProperty("ascOutputActionFormat"))
 		    .replaceAll("%ACTION%", message)
 		    .replaceAll("%USER(NAME)?%", user));
-	    logLines.add(data[0]+" * "+user+" "+message);
+	    sqlData.add(user+"\01"+message+"\01"+4+"\01"+messageTime);
 	}
 	
 	else if (line.contains("[Server thread/INFO]:") && onlineUsers.contains(stripCodes(line.split(" ")[3])) && !line.contains("lost connection") && line.contains("achievement")) { // Achievements
-	    String[] data = line.split(" ");
 	    String user = stripCodes(data[3]);
 	    String achievementData = line.split("achievement \\[")[1];
 	    String achievementName = achievementData.substring(0, achievementData.length() - 1);
 	    out.add((engine == null ? "%C2%%USER%%C1% earned the achievement %C2%%ACHIEVEMENTNAME%%C1%!" : engine.config.getProperty("ascOutputAchievementFormat"))
 		    .replaceAll("%ACHIEVEMENTNAME%", achievementName)
 		    .replaceAll("%USER(NAME)?%", user));
-	    logLines.add(data[0]+" "+user+" has earned the achievement "+achievementName);
+	    sqlData.add(user+"\01"+"has earned the achievement "+achievementName+"\01"+5+"\01"+messageTime);
 	}
 	
 	else if (line.contains("[Server thread/INFO]:") && onlineUsers.contains(stripCodes(line.split(" ")[3])) && !line.contains("lost connection")) { // Deaths
-	    String[] data = line.split(" ");
 	    String user = data[3];
 	    //System.out.println(user);
 	    String deathMessage = line.split(user+" ")[1];
@@ -243,7 +262,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1% %DEATHMESSAGE%" : engine.config.getProperty("ascOutputDeathFormat"))
 		    .replaceAll("%DEATHMESSAGE%", deathMessage)
 		    .replaceAll("%USER(NAME)?%", user));
-	    logLines.add(data[0]+" "+user+" "+deathMessage);
+	    sqlData.add(user+"\01"+deathMessage+"\01"+5+"\01"+messageTime);
 	    Properties deaths = new Properties();
 	    try {
 		if (new File(this.cacheDir, "deaths.iuc").exists())
@@ -252,7 +271,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		out.add("%C2%"+user+"%C1% has died "+(death == 1 ? "for the first time!" : "%C2%"+death+"%C1% times!"));
 		deaths.put(user, Integer.toString(death));
 		deaths.store(new FileOutputStream(new File(this.cacheDir, "deaths.iuc")), "Death counter file");
-		logLines.add(data[0]+" "+user+" has died "+(death == 1 ? "for the first time!" : +death+" times!"));
+		sqlData.add(user+"\01"+"has died "+(death == 1 ? "for the first time!" : death+" times!")+"\01"+5+"\01"+messageTime);
 	    }
 	    catch (IOException | NumberFormatException e) {
 		if (engine == null)
@@ -268,14 +287,13 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	}
 	
 	else if (line.contains("Stopping server") && !this.serverStopped) { //Server stop
-	    String[] data = line.split(" ");
 	    if (!this.onlineUsers.isEmpty()) {
 		for (Iterator<String> it = this.onlineUsers.iterator(); it.hasNext();) {
 		    String user = stripCodes(it.next());
 		    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 			    .replaceAll("%TYPE%", "left")
 			    .replaceAll("%USER(NAME)?%", user));
-		    logLines.add(data[0]+" "+user+" left the game.");
+		    sqlData.add(user+"\01left the game\01"+2+"\01"+messageTime);
 		}
 		this.onlineUsers.clear();
 		saveOnline();
@@ -301,12 +319,39 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		    engine.send("PRIVMSG #QuestHelp :"+(engine.config.getProperty("ascOutputPrefix")+outLine).replaceAll("%SERVER(NAME)?%", this.serverName));
 	    }
 	    
-	    if (!logLines.isEmpty())
+	    if (!sqlData.isEmpty()) {
+		for (Iterator<String> it = sqlData.iterator(); it.hasNext();) {
+		    PreparedStatement ps = null;
+		    try {
+			ps = engine.getSQLConnection().prepareStatement("INSERT INTO awesome_chat (server, chattype, speaker, message, time) VALUES(?, ?, ?, ?, ?)");
+		    } catch (SQLException ex) {
+			engine.logError(ex, "Couldn't prepare SQL statement, website chat logging will not function.", "SQL");
+		    }
+		    try {
+			String[] lineD = it.next().split("\01");
+			
+			/* (server, chattype, speaker, message, time) */
+			
+			ps.setInt(1, this.serverID);
+			ps.setInt(2, Integer.parseInt(lineD[2]));
+			ps.setString(3, lineD[0]);
+			ps.setString(4, lineD[1]/*.replaceAll("'", "''")*/);
+			ps.setInt(5, (int)Long.parseLong(lineD[3]));
+			
+			ps.executeUpdate();
+			
+		    } catch (SQLException ex) {
+			engine.logError(ex, "SQL", ps.toString());
+		    }
+		}
+	    }
+	    
+	    //if (!logLines.isEmpty())
 //		if (!(line.contains("Stopping server") || line.contains("For help, type \"help\" or \"?\"")))
 //		    writeToLog(line);
 //		else
-		for (Iterator<String> it = logLines.iterator(); it.hasNext();)
-		    writeToLog("["+date+"] "+it.next());
+	    //for (Iterator<String> it = logLines.iterator(); it.hasNext();)
+	    // writeToLog("["+date+"] "+it.next());
 	    
 	}
 	

@@ -4,17 +4,21 @@ import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
  * @author iPeer
  */
 public class AWeSomeChat implements AnnouncerHandler, DebuggableSub {
-    
+   
     private Main engine;
     private List<IAWeSomeChatTailer> tailers;
     private Throwable lastException;
@@ -35,8 +39,8 @@ public class AWeSomeChat implements AnnouncerHandler, DebuggableSub {
 	
 	tailers = new ArrayList<IAWeSomeChatTailer>();
 	
-	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/survival/logs/latest.log", "Survival"));
-	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/creative/logs/latest.log", "Creative"));
+	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/survival/logs/latest.log", "Survival", 1));
+	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/creative/logs/latest.log", "Creative", 2));
 	//tailers.add(new AWeSomeChatTailer(engine, "F:\\MC Server\\logs\\latest.log", "Test")); // Test server
     }
     

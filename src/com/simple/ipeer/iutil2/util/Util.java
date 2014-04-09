@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
+import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -27,7 +28,7 @@ import javax.crypto.spec.SecretKeySpec;
  * @author iPeer
  */
 public class Util {
-    
+        
     public static LinkedList<String> loadLinkedListFromFile(File file) {
 	
 	LinkedList<String> list = new LinkedList<String>();
@@ -43,10 +44,6 @@ public class Util {
 	}
 	
 	return list;
-    }
-    
-    public Util() {
-	
     }
     
     public static List<String> loadListFromFile(File file) throws InstantiationException, IllegalAccessException { // Chances are it's a string if we're loading from a file

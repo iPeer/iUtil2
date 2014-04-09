@@ -4,14 +4,15 @@ import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
+import com.simple.ipeer.iutil2.util.InterruptThread;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.net.UnknownHostException;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -56,6 +57,8 @@ public class MinecraftService implements IMinecraftService, Announcer, Debuggabl
     @Override
     public void update() {
 	Long pingStart = 0L;
+	data.put("status", "2");
+	data.put("errorMessage", "Timed Out.");
 	try {
 	    HttpURLConnection con = null;
 	    if (useHTTPS) {
@@ -81,11 +84,17 @@ public class MinecraftService implements IMinecraftService, Announcer, Debuggabl
 	    }
 	    pingStart = System.currentTimeMillis();
 	    con.setRequestMethod(reqMethod);
+	    Thread t = new Thread(new InterruptThread(con, 5000));
+	    t.start();
 	    con.setConnectTimeout(5000);
 	    con.setReadTimeout(5000);
+	    con.connect();
 	    data.put("status", Integer.toString(con.getResponseCode()));
+	    data.remove("errorMessage");
+	    if (t.isAlive())
+		t.interrupt();
 	} catch (UnknownHostException e) {
-	    data.put("errorMessage", "unknown Host");
+	    data.put("errorMessage", "Unknown Host");
 	}
 	catch (SocketTimeoutException e) {
 	    data.put("errorMessage", "Timed out");

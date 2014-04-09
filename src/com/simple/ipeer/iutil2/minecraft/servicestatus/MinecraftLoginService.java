@@ -2,6 +2,7 @@ package com.simple.ipeer.iutil2.minecraft.servicestatus;
 
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.irc.SSLUtils;
+import com.simple.ipeer.iutil2.util.InterruptThread;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -46,6 +47,8 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
     
     @Override
     public void update() {
+	data.put("status", "2");
+	data.put("errorMessage", "Timed Out.");
 	long pingStart = 0L;
 	String line = "";
 	try {
@@ -65,6 +68,8 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
 	    con.setDoOutput(true);
 	    con.setReadTimeout(5000);
 	    con.setConnectTimeout(5000);
+	    Thread t = new Thread(new InterruptThread(con, 5000));
+	    t.start();
 	    con.connect();
 	    DataOutputStream wr = new DataOutputStream(con.getOutputStream());
 	    wr.writeBytes(params);
@@ -79,6 +84,9 @@ public class MinecraftLoginService extends MinecraftService implements IMinecraf
 	    in.close();
 	    wr.close();
 	    data.put("status", Integer.toString(con.getResponseCode()));
+	    data.remove("errorMessage");
+	    if (t.isAlive())
+		t.interrupt();
 	} catch (NoSuchAlgorithmException e) {
 	    data.put("errorMessage", "Couldn't read login credentials.");
 	}
