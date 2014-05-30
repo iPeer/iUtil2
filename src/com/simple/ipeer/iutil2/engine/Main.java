@@ -58,7 +58,7 @@ import java.util.regex.Pattern;
 
 public final class Main implements Runnable {
     
-    public final String BOT_VERSION = "763";
+    public final String BOT_VERSION = "771";
     
     private static final File DEFAULT_CONFIG_DIR = new File("./config");
     //private static final Server DEFAULT_SERVER = new Server("127.0.0.1", false, 6667);
@@ -112,8 +112,10 @@ public final class Main implements Runnable {
     private CommandManager commandManager;
     private Twitter twitter;
     private Connection sqlConnection;
+    private Connection mcSQLConnection;
     private HashMap<String, String> cmdLine;
     private boolean creatingSQLConnection = false;
+    private long lastSQLReconnectTry = 0L;
     
     
     public static void main(String[] args) {
@@ -292,10 +294,13 @@ public final class Main implements Runnable {
 	if (level == LogLevel.NEVER || level == LogLevel.NONE) { return; }
 	String time = (new SimpleDateFormat("dd/MM/yy HH:mm:ss")).format(new Date(System.currentTimeMillis()));
 	String logOut = time+" ["+type+"] "+line;
-	if ((level == LogLevel.DEBUG_ONLY || level == LogLevel.LOG_AND_DEBUG || level == LogLevel.ALL) && config.getProperty("debug").equals("true")) {
+	if ((level == LogLevel.DEBUG_ONLY || level == LogLevel.LOG_AND_DEBUG || level == LogLevel.ALL || level == LogLevel.LOG_DEBUG_AND_CHANNEL) && config.getProperty("debug").equals("true")) {
 	    System.out.println(logOut);
 	}
-	if (level == LogLevel.LOG_AND_DEBUG || level == LogLevel.LOG_ONLY || level == LogLevel.ALL) {
+	if (level == LogLevel.LOG_DEBUG_AND_CHANNEL && config.getProperty("enableChannelLogging", "true").equals("true") && isConnected() && getIAL().amIOnChannel("#peer.dev")) {
+		    send("PRIVMSG #Peer.Dev :[LOG] ("+type+"): "+line);
+	}
+	if (level == LogLevel.LOG_AND_DEBUG || level == LogLevel.LOG_ONLY || level == LogLevel.ALL || level == LogLevel.LOG_DEBUG_AND_CHANNEL) {
 	    try {
 		logWriter.write(logOut.replaceAll("(\\r\\n|\\n\\r)", "")+"\r\n");
 		logWriter.flush();
@@ -694,7 +699,7 @@ public final class Main implements Runnable {
     }
     
     public boolean isConnected() {
-	return getConnection().isConnected();
+	return (getConnection() != null && getConnection().isConnected());
     }
     
     public void addSentBytes(long bytes) {
@@ -825,17 +830,32 @@ public final class Main implements Runnable {
     }
     
     public void setSQLConnection(Connection c) {
-	this.sqlConnection = c;
+	setSQLConnection("", c);
+    }
+    
+    public void setSQLConnection(String s, Connection c) {
+	if (s.equals("mc"))
+	    this.mcSQLConnection = c;
+	else
+	    this.sqlConnection = c;
     }
     
     public Connection getSQLConnection() {
 	return this.sqlConnection;
     }
     
+    public Connection getSQLConnection(String t) {
+	if (t.equals("mc"))
+	    return this.mcSQLConnection;
+	else
+	    return this.sqlConnection;
+    }
+    
     public void createSQLConnection() {
-	if (!this.creatingSQLConnection) {
+	if (!this.creatingSQLConnection && System.currentTimeMillis() - this.lastSQLReconnectTry >= 60000) {
 	    this.creatingSQLConnection = true;
-	    log("Creating SQL connection.", "SQL", LogLevel.LOG_AND_DEBUG);
+	    this.lastSQLReconnectTry = System.currentTimeMillis();
+	    log("Creating SQL connections.", "SQL", LogLevel.LOG_DEBUG_AND_CHANNEL);
 	    Properties p = new Properties();
 	    p.put("user", "iPeer");
 	    p.put("password", Util.readEncrypted(new File("./sql/pwd")));
@@ -845,16 +865,21 @@ public final class Main implements Runnable {
 //	if (cmdLine.get("sqlUseSSL").equals("true"))
 //	    p.put("ssl", "true");
 	    Connection c = null;
+	    Connection mcC = null;
 	    try {
 		c = DriverManager.getConnection("jdbc:postgresql://"+config.getProperty("sqlHostPort", "localhost:5432")+"/iPeer", p);
-		log("Succesfully created SQL connection.", "SQL", LogLevel.LOG_AND_DEBUG);
+		mcC = DriverManager.getConnection("jdbc:postgresql://"+config.getProperty("sqlHostPort", "localhost:5432")+"/postgres", p);
+		log("Succesfully created SQL connections.", "SQL", LogLevel.LOG_DEBUG_AND_CHANNEL);
 		statusUpdateTimeQ = c.prepareStatement("UPDATE update_times SET time = ? WHERE name = ?");
 	    } catch (SQLException ex) {
 		logError(ex, "SQL");
-		log("FATAL: Couldn't acquire connection to SQL server. Terminating.", "SQL", LogLevel.LOG_AND_DEBUG);
-		System.exit(1);
+		log("Couldn't recreate SQL connections. Waiting at least 1 minute before trying again.", "SQL", LogLevel.LOG_DEBUG_AND_CHANNEL);
+//		log("FATAL: Couldn't acquire connection to SQL server. Terminating.", "SQL", LogLevel.LOG_DEBUG_AND_CHANNEL);
+//		System.exit(1);
+		return;
 	    }
 	    setSQLConnection(c);
+	    setSQLConnection("mc", mcC);
 	    this.creatingSQLConnection = false;
 	}
     }

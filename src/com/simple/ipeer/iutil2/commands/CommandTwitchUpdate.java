@@ -4,6 +4,7 @@ package com.simple.ipeer.iutil2.commands;
 import com.simple.ipeer.iutil2.commands.base.CommandException;
 import com.simple.ipeer.iutil2.commands.base.ICommandSender;
 import com.simple.ipeer.iutil2.commands.base.InsufficientPermissionsException;
+import com.simple.ipeer.iutil2.engine.LogLevel;
 
 /**
  *
@@ -26,6 +27,7 @@ public class CommandTwitchUpdate extends Command {
 		new Runnable() {
 		    public void run() {
 			sendReply(sender, sendPrefix, "Updating all Twitch threads...");
+			engine.log(sender.getNick()+" Has forced an update on all Twitch threads.", "Twitch", LogLevel.LOG_DEBUG_AND_CHANNEL);
 			long start = System.currentTimeMillis();
 			engine.getAnnouncers().get("Twitch").updateAll();
 			sendReply(sender, sendPrefix, "Finished updating all Twitch threads. Update took "+(System.currentTimeMillis() - start)+"ms.");

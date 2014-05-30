@@ -144,7 +144,7 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
 		} catch (SQLException ex) {
 		    engine.logError(ex, "SQL", query);
 		    if (ex.getMessage().equals("This connection has been closed.")) {
-			engine.log("SQL Connection is no longer valid. Another will be created.", "SQL", LogLevel.LOG_AND_DEBUG);
+			engine.log("SQL Connection is no longer valid. Another will be created.", "SQL", LogLevel.LOG_DEBUG_AND_CHANNEL);
 			engine.createSQLConnection();
 		    }
 		}

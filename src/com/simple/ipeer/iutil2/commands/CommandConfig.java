@@ -36,7 +36,7 @@ public class CommandConfig extends Command {
 			newEntry += (newEntry.length() > 0 ? " " : "")+d[x];
 		    engine.config.put(configEntry, newEntry);
 		    engine.saveConfig();
-		    sendReply(sender, sendPrefix, String.format("Config entry %s has been changed from %s to %s.", configEntry, newEntry, oldEntry));
+		    sendReply(sender, sendPrefix, String.format("Config entry %s has been changed from %s to %s.", configEntry, oldEntry, newEntry));
 		}
 		else {
 		    sendReply(sender, sendPrefix, String.format("Config entry %s is currently set as %s", configEntry, engine.config.getProperty(configEntry)));

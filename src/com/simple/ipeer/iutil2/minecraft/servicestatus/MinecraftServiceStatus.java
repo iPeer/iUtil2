@@ -131,10 +131,15 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable, Debug
 	    Main.statusUpdateTimeQ.setString(2, "minecraft");
 	    Main.statusUpdateTimeQ.executeUpdate();
 	} catch (SQLException ex) {
-	    engine.logError(ex, "Couldn't update update time for Minecraft Service Status.", "SQL");
+	    engine.logError(ex, "SQL", this.sqlQ.toString());
 	    if (ex.getMessage().equals("This connection has been closed.")) {
-		engine.log("SQL Connection is no longer valid. Another will be created.", "SQL", LogLevel.LOG_AND_DEBUG);
+		engine.log("SQL Connection is no longer valid. Another will be created.", "SQL", LogLevel.LOG_DEBUG_AND_CHANNEL);
 		engine.createSQLConnection();
+		try {
+		    this.sqlQ = engine.getSQLConnection().prepareStatement("UPDATE minecraft_status SET (address, status, ping, servername, error) = (?, ?, ?, ?, ?) WHERE servername = ?");
+		} catch (SQLException ex1) {
+		    
+		}
 	    }
 	}
     }

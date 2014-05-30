@@ -244,7 +244,7 @@ public class Protocol {
 				.replaceAll("%LIKES%", ytdata.get("likes"))
 				.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
 				.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
-			if (!playlistID.equals("")) {
+			if (!playlistID.equals("") && !playlistID.startsWith("WL") /* "Watch Later" playlists */) {
 			    plData = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getPlaylistInfo(playlistID.split("[&\\?#]")[0]);
 			    if (plData.containsKey("error"))
 				plOut = plData.get("error");

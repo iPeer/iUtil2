@@ -180,7 +180,7 @@ public class Twitter {
     }
     
     public void log(String line) {
-	log(line, LogLevel.LOG_AND_DEBUG);
+	log(line, LogLevel.LOG_DEBUG_AND_CHANNEL);
     }
     
     public void log(String line, LogLevel l) {

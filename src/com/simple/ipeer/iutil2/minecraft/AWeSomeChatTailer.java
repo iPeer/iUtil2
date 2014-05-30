@@ -187,6 +187,18 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	
 	// Construct a Unix timestamp from the date of the message.
 	
+	/*
+	*   ID Map:
+	*
+	*   1 - Regular Chat
+	*   2 - Connects
+	*   3 - Disconnects
+	*   4 - /me
+	*   5 - Deaths (messages)
+	*   6 - iUtil generated Death message (_____ has died n time(s))
+	*   7 - Achievements
+	*/
+	
 	df = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
 	Date d2;
 	long messageTime = 0L;
@@ -194,11 +206,11 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    d2 = df.parse(date+" "+data[0].substring(1, data[0].length() - 1));
 	    messageTime = d2.getTime() / 1000L;
 	} catch (ParseException ex) {
-	    Logger.getLogger(AWeSomeChatTailer.class.getName()).log(Level.SEVERE, null, ex);
+	    //Logger.getLogger(AWeSomeChatTailer.class.getName()).log(Level.SEVERE, null, ex);
 	    messageTime = System.currentTimeMillis() / 1000L;
 	}
 	
-	if (line.contains("[Server thread/INFO]: <")) { // Chat
+	if (line.contains("[Server thread/INFO]: <") || line.contains("[INFO] <")) { // Chat
 	    String user = data[3].replaceAll("[\\<\\>]", "");
 	    String message = line.split(user+"> ")[1];
 	    user = stripCodes(user);
@@ -227,10 +239,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 		    .replaceAll("%TYPE%", type)
 		    .replaceAll("%USER(NAME)?%", user));
-	    sqlData.add(user+"\01"+(type.equals("joined") ? "joined the game." : "left the game")+"\01"+2+"\01"+messageTime);
+	    sqlData.add(user+"\01"+(type.equals("joined") ? "joined the game." : "left the game")+"\01"+(type.equals("joined") ? 2 : 3)+"\01"+messageTime);
 	}
 	
-	else if (line.contains("[Server thread/INFO]: *")) { // Actions
+	else if (line.contains("[Server thread/INFO]: *") || line.contains("[INFO] *")) { // Actions
 	    String user = data[4];
 	    String message = line.split(user+" ")[1];
 	    user = stripCodes(user);
@@ -250,10 +262,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1% earned the achievement %C2%%ACHIEVEMENTNAME%%C1%!" : engine.config.getProperty("ascOutputAchievementFormat"))
 		    .replaceAll("%ACHIEVEMENTNAME%", achievementName)
 		    .replaceAll("%USER(NAME)?%", user));
-	    sqlData.add(user+"\01"+"has earned the achievement "+achievementName+"\01"+5+"\01"+messageTime);
+	    sqlData.add(user+"\01"+"has earned the achievement "+achievementName+"\01"+7+"\01"+messageTime);
 	}
 	
-	else if (line.contains("[Server thread/INFO]:") && onlineUsers.contains(stripCodes(line.split(" ")[3])) && !line.contains("lost connection")) { // Deaths
+	else if ((line.contains("[Server thread/INFO]:") || line.contains("[INFO]")) && onlineUsers.contains(stripCodes(line.split(" ")[3])) && !line.contains("lost connection")) { // Deaths
 	    String user = data[3];
 	    //System.out.println(user);
 	    String deathMessage = line.split(user+" ")[1];
@@ -271,7 +283,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		out.add("%C2%"+user+"%C1% has died "+(death == 1 ? "for the first time!" : "%C2%"+death+"%C1% times!"));
 		deaths.put(user, Integer.toString(death));
 		deaths.store(new FileOutputStream(new File(this.cacheDir, "deaths.iuc")), "Death counter file");
-		sqlData.add(user+"\01"+"has died "+(death == 1 ? "for the first time!" : death+" times!")+"\01"+5+"\01"+messageTime);
+		sqlData.add(user+"\01"+"has died "+(death == 1 ? "for the first time!" : death+" times!")+"\01"+6+"\01"+messageTime);
 	    }
 	    catch (IOException | NumberFormatException e) {
 		if (engine == null)
@@ -293,7 +305,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 			    .replaceAll("%TYPE%", "left")
 			    .replaceAll("%USER(NAME)?%", user));
-		    sqlData.add(user+"\01left the game\01"+2+"\01"+messageTime);
+		    sqlData.add(user+"\01left the game\01"+3+"\01"+messageTime);
 		}
 		this.onlineUsers.clear();
 		saveOnline();
@@ -323,7 +335,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		for (Iterator<String> it = sqlData.iterator(); it.hasNext();) {
 		    PreparedStatement ps = null;
 		    try {
-			ps = engine.getSQLConnection().prepareStatement("INSERT INTO awesome_chat (server, chattype, speaker, message, time) VALUES(?, ?, ?, ?, ?)");
+			ps = engine.getSQLConnection("mc").prepareStatement("INSERT INTO v_chat (server, chattype, speaker, message, time) VALUES(?, ?, ?, ?, ?)");
 		    } catch (SQLException ex) {
 			engine.logError(ex, "Couldn't prepare SQL statement, website chat logging will not function.", "SQL");
 		    }
