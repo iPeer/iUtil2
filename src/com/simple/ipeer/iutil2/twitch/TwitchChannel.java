@@ -1,24 +1,26 @@
 package com.simple.ipeer.iutil2.twitch;
 
+import com.simple.ipeer.iutil2.engine.Announcer;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
+import com.simple.ipeer.iutil2.engine.Main;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URL;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import javax.net.ssl.HttpsURLConnection;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
-
-import com.simple.ipeer.iutil2.engine.Announcer;
-import com.simple.ipeer.iutil2.engine.DebuggableSub;
-import com.simple.ipeer.iutil2.engine.Main;
 import javax.xml.parsers.ParserConfigurationException;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONValue;
+
+
 import org.xml.sax.SAXException;
 
 public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
@@ -34,6 +36,11 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
     private Throwable lastException;
     private long lastExceptionTime = 0L;
     private long startupTime = 0L;
+    
+    public static void main(String[] args) throws IOException, SAXException, ParserConfigurationException {
+	TwitchChannel t = new TwitchChannel("anderzel", null, null);
+	t.update();
+    }
     
     public TwitchChannel(String name, Main engine, Twitch twitch) {
 	this.engine = engine;
@@ -84,37 +91,35 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
     @Override
     public void update() throws IOException, SAXException, ParserConfigurationException {
 	List<String> streamData = new LinkedList<String>();
-	DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-	DocumentBuilder a;
-	a = f.newDocumentBuilder();
-	Document doc = a.newDocument();
-	doc = a.parse("https://api.justin.tv/api/stream/list.xml?channel="+this.channelName);
-	doc.getDocumentElement().normalize();
+	try {
+	    URL url = new URL("https://api.twitch.tv/kraken/streams?channel="+this.channelName.toLowerCase());
+	    HttpsURLConnection connection = (HttpsURLConnection)url.openConnection();
+	    
+	    BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+	    String jsonData = in.readLine();
+	    
+	    JSONObject json = (JSONObject)JSONValue.parse(jsonData);
+	    
+	    JSONArray streams = (JSONArray)json.get("streams");
+	    
+	    //System.err.println("DATA: "+streams);
+	    
+	    json = (JSONObject)JSONValue.parse(streams.get(0).toString());
+	    
+	    JSONObject channel = (JSONObject)json.get("channel");
+	    
+	    //System.err.println("NEW DATA: "+channel);
+	    
+	    String status = (String)channel.get("status");
+	    String game = (String)channel.get("game");
+	    String userName = (String)channel.get("display_name");
+	    streamData.add(0, userName);
+	    streamData.add(1, status);
+	    streamData.add(2, "RESERVED");
+	    streamData.add(3, game);
+	} catch (IndexOutOfBoundsException e) { }
+	//System.out.println(status+" / "+game+" / "+userName);
 	
-	NodeList data = doc.getDocumentElement().getElementsByTagName("stream");
-	if (data.getLength() > 0) {
-	    String gameName = "", streamDesc = "", streamQuality = "", streamID = "";
-	    data = data.item(0).getChildNodes();
-	    streamID = ((Element)data).getElementsByTagName("id").item(0).getFirstChild().getNodeValue();
-	    //data.item(11).getFirstChild().getNodeValue();
-	    // The Stream title changes place (doesn't that defeat the point of an API?), so we have to do it this way...
-	    try {
-		streamDesc = ((Element)data).getElementsByTagName("title").item(0).getFirstChild().getNodeValue().trim();
-	    }
-	    catch (NullPointerException e) { }
-	    // Seems the quality can sometimes be contaminated by the title of the stream.
-	    streamQuality = ((Element)data).getElementsByTagName("video_height").item(0).getFirstChild().getNodeValue();
-	    //data.item(17).getFirstChild().getNodeValue();
-	    try {
-		gameName = ((Element)data).getElementsByTagName("meta_game").item(0).getFirstChild().getNodeValue();
-	    }
-	    catch (NullPointerException e) { }
-	    //data.item(27).getFirstChild().getNodeValue();
-	    streamData.add(0, streamID);
-	    streamData.add(1, streamDesc.replaceAll("&#39;", "'").replaceAll("[\\n\\r]", " "));
-	    streamData.add(2, streamQuality);
-	    streamData.add(3, gameName.replaceAll("&#39;", "'"));
-	}
 	announce(streamData);
 	
 	
@@ -139,24 +144,24 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
 		    streamQuality = a.getProperty("lastQuality", "");
 		}
 		/*
-		 * 0 = ID
-		 * 1 = Desc
-		 * 2 = Quality
-		 * 3 = game
-		 */
+		* 0 = Username
+		* 1 = Desc
+		* 2 = Quality
+		* 3 = game
+		*/
 		if (!(data.get(3)+data.get(1)/*+data.get(2)*/).equals(gameName+streamDesc/*+streamQuality*/)) {
 		    if (data.get(3).equals("") && data.get(1).equals("")) // No game OR desc
-			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming [%C2%%STREAMQUALITY%%C1%] %DASH% %URL%" : engine.config.getProperty("twitchAnnounceFormatNoGameOrDesc"));
+			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming %DASH% %C2%%URL%" : engine.config.getProperty("twitchAnnounceFormatNoGameOrDesc"));
 		    else if (data.get(3).equals("") && !data.get(1).equals("")) // No game, has desc
-			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming %C2%%STREAMDESC% %C1%[%C2%%STREAMQUALITY%%C1%] %DASH% %URL%" : engine.config.getProperty("twitchAnnounceFormatNoGame"));
+			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming %C2%%STREAMDESC% %DASH% %%C2%URL%" : engine.config.getProperty("twitchAnnounceFormatNoGame"));
 		    else if (!data.get(3).equals("") && data.get(1).equals("")) // Game, no desc
-			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming %C2%%GAMENAME% %C1%[%C2%%STREAMQUALITY%%C1%] %DASH% %URL%" : engine.config.getProperty("twitchAnnounceFormatNoDesc"));
+			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming %C2%%GAMENAME% %DASH% %C2%%URL%" : engine.config.getProperty("twitchAnnounceFormatNoDesc"));
 		    else // everything present
-			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming %C2%%GAMENAME% %C1%(%C2%%STREAMDESC%%C1%) [%C2%%STREAMQUALITY%%C1%] %DASH% %URL%" : engine.config.getProperty("twitchAnnounceFormat"));
+			outMessage = (engine == null ? "%C2%%USER% %C1%is streaming %C2%%GAMENAME% %C1%(%C2%%STREAMDESC%%C1%) %DASH% %C2%%URL%" : engine.config.getProperty("twitchAnnounceFormat"));
 		    a.put("lastGame", data.get(3));
 		    a.put("lastStatus", data.get(1));
-		    a.put("lastID", data.get(0));
-		    a.put("lastQuality", data.get(2));
+		    //a.put("lastID", data.get(0));
+		    
 		    a.store(new FileOutputStream(this.cacheFile), "Twitch.TV Cache for "+this.channelName);
 		}
 		
@@ -245,22 +250,22 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
     public String getThreadName() {
 	return this.thread.getName();
     }
-
+    
     @Override
     public Throwable getLastExeption() {
 	return this.lastException;
     }
-
+    
     @Override
     public long getLastExceptionTime() {
 	return this.lastExceptionTime;
     }
-
+    
     @Override
     public long getLastUpdateTime() {
 	return this.lastUpdate;
     }
-
+    
     @Override
     public long getStartupTime() {
 	return this.startupTime;

@@ -44,6 +44,8 @@ public class AWeSomeChat implements AnnouncerHandler, DebuggableSub {
 	//tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/events/server.log", "Events", 3));
 	//tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/ftb/server.log", "FTB", 4));
 	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/terrafirma/server.log", "TFC", 5));
+	//tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/pixelmon/server.log", "Pixelmon", 6));
+	tailers.add(new AWeSomeChatTailer(engine, "/home/minecraft/servers/crackpack/server.log", "Crackpack", 7));
 	//tailers.add(new AWeSomeChatTailer(engine, "F:\\MC Server\\logs\\latest.log", "Test")); // Test server
     }
     

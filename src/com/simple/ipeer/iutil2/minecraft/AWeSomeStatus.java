@@ -43,8 +43,8 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
 	this.downServers = new HashMap<String, Long>();
 	HashMap<String, String> s = new HashMap<String, String>();
 	s.put("asUpdateDelay", "60000");
-	s.put("asServers", "auron.co.uk:35565,auron.co.uk:35566,auron.co.uk:35567");
-	s.put("asServerNames", "auron.co.uk:35565|Survival,auron.co.uk:35566|Creative,auron.co.uk:35567|Events");
+	s.put("asServers", "auron.co.uk:35565,auron.co.uk:35566,auron.co.uk:35567,auron.co.uk:25568");
+	s.put("asServerNames", "auron.co.uk:35565|Survival,auron.co.uk:35566|Creative,auron.co.uk:35567|Events,auron.co.uk:25568|Crackpack");
 	s.put("asReportFailures", "false");
 	s.put("asIgnoreFailuresFrom", "auron.co.uk:35567");
 	s.put("asRereportFailuresAfter", "600000");

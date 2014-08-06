@@ -2,6 +2,7 @@ package com.simple.ipeer.iutil2.minecraft;
 
 import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
+import com.simple.ipeer.iutil2.engine.LogLevel;
 import com.simple.ipeer.iutil2.engine.Main;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -49,16 +50,20 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     private long lastExceptionTime = 0L;
     private boolean serverStopped = false;
     private int serverID = 0;
+    private boolean silentUpdate = false;
     
     private PreparedStatement sqlQ;
     
     public static void main(String[] args) {
+	String l = "2014-07-10 20:12:46 [INFO] Izora Castleton was slain by iPeer";
+	System.err.println(l.split(" ")[l.split(" ").length - 1]);
+	System.err.println(l.split("INFO] ")[1]);
 	/*AWeSomeChatTailer act = new AWeSomeChatTailer(null, "F:\\MC Server\\logs\\latest.log", "Test");
 	act.startIfNotRunning();*/
-	Date d = new Date();
+	/*Date d = new Date();
 	d.setTime(System.currentTimeMillis());
 	DateFormat df = SimpleDateFormat.getDateInstance();
-	System.err.println(df.format(d));
+	System.err.println(df.format(d));*/
     }
     
     
@@ -112,8 +117,11 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	try {
 	    Properties cache = new Properties();
 	    File markerFile = new File(this.cacheDir, "marker.iuc");
+	    System.err.println(this.serverName+" / "+markerFile.getAbsolutePath()+" / "+markerFile.exists()+" / "+this.tailFile.getAbsolutePath()+" / "+this.tailFile.exists());
 	    if (markerFile.exists())
 		cache.load(new FileInputStream(markerFile));
+	    else
+		this.silentUpdate = true;
 	    if (engine != null)
 		engine.log("AWeSomeChat Thread for "+this.serverName+" is now running", "AWeSomeChat");
 	    else
@@ -125,8 +133,9 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		    List<String> lines = Files.readAllLines(Paths.get(this.tailFile.getAbsolutePath()), (System.getProperty("os.name").equals("Linux") ? StandardCharsets.UTF_8 : StandardCharsets.ISO_8859_1));
 		    //System.err.println(lines.size());
 		    int x = Integer.parseInt(cache.getProperty("marker", "0"));
+		    //System.err.println(this.serverName+" / "+x+" / "+lines.size());
 		    if (x > lines.size())
-			x = 0;
+			x = (this.tailFile.getAbsolutePath().contains("server.log") ? lines.size() : 0); // If the server uses the old logging system (entire history in one file), set cache to length of that file, otherwise set to 0.
 		    for(; x < lines.size(); x++) {
 			saveCache = true;
 			try {
@@ -144,6 +153,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 //			this.serverStopped = false;
 //		    }
 //		    else
+		    }
+		    if (this.silentUpdate) {
+			this.silentUpdate = false;
+			engine.log("Parsed "+lines.size()+" lines silently for AWeSome server \""+this.serverName+"\"", "AWeSome Chat", LogLevel.LOG_DEBUG_AND_CHANNEL);
 		    }
 		    if (saveCache) {
 			saveCache = false;
@@ -199,7 +212,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	*   7 - Achievements
 	*/
 	
-	df = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
+	df = new SimpleDateFormat((this.serverName.equalsIgnoreCase("Crackpack") ? "yyyy-MM-dd HH:mm:ss" : "dd-MMM-yyyy HH:mm:ss"));
 	Date d2;
 	long messageTime = 0L;
 	try {
@@ -239,7 +252,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 		    .replaceAll("%TYPE%", type)
 		    .replaceAll("%USER(NAME)?%", user));
-	    sqlData.add(user+"\01"+(type.equals("joined") ? "joined the game." : "left the game")+"\01"+(type.equals("joined") ? 2 : 3)+"\01"+messageTime);
+	    sqlData.add(user+"\01"+(type.equals("joined") ? "joined the game." : "left the game.")+"\01"+(type.equals("joined") ? 2 : 3)+"\01"+messageTime);
 	}
 	
 	else if (line.contains("[Server thread/INFO]: *") || line.contains("[INFO] *")) { // Actions
@@ -264,8 +277,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		    .replaceAll("%USER(NAME)?%", user));
 	    sqlData.add(user+"\01"+"has earned the achievement "+achievementName+"\01"+7+"\01"+messageTime);
 	}
-	
-	else if ((line.contains("[Server thread/INFO]:") || line.contains("[INFO]")) && onlineUsers.contains(stripCodes(line.split(" ")[3])) && !line.contains("lost connection")) { // Deaths
+	else if ((line.contains("[Server thread/INFO]:") || line.contains("[INFO]")) && onlineUsers.contains(stripCodes(line.split(" ")[3])) && !line.contains("lost connection") && !line.contains("moved wrongly") && !line.contains("moved too quickly")) { // Deaths
 	    String user = data[3];
 	    //System.out.println(user);
 	    String deathMessage = line.split(user+" ")[1];
@@ -297,7 +309,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		}
 	    }
 	}
-	
+	else if ((line.contains("[Server thread/INFO]:") || line.contains("[INFO]")) && this.serverName.equalsIgnoreCase("crackpack") && !line.contains("lost connection") && !line.contains("moved wrongly") && !line.contains("moved too quickly") && onlineUsers.contains(stripCodes(line.split(" ")[line.split(" ").length - 1]))) { //Miniboss kills on Crackpack
+	    String l = line.split("INFO] ")[1];
+	    out.add(l);
+	}
 	else if (line.contains("Stopping server") && !this.serverStopped) { //Server stop
 	    if (!this.onlineUsers.isEmpty()) {
 		for (Iterator<String> it = this.onlineUsers.iterator(); it.hasNext();) {
@@ -305,7 +320,7 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 		    out.add((engine == null ? "%C2%%USER%%C1% %TYPE% the game." : engine.config.getProperty("ascOutputInOutFormat"))
 			    .replaceAll("%TYPE%", "left")
 			    .replaceAll("%USER(NAME)?%", user));
-		    sqlData.add(user+"\01left the game\01"+3+"\01"+messageTime);
+		    sqlData.add(user+"\01left the game.\01"+3+"\01"+messageTime);
 		}
 		this.onlineUsers.clear();
 		saveOnline();
@@ -319,18 +334,19 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
 	    out.add("Server started!");
 	}
 	if (!out.isEmpty()) {
-	    for (String outLine : out) {
+	    if (!this.silentUpdate) {
+		for (String outLine : out) {
 //		try {
 //		    outLine = new String(outLine.getBytes("UTF-8"));
 //		} catch (UnsupportedEncodingException ex) {
 //		    engine.log("Couldn't convert string to UTF-8", "AweSomeChat");
 //		}
-		if (engine == null)
-		    System.err.println(("%C1%[%C2%AWeSome %SERVERNAME%%C1%]: "+outLine).replaceAll("%SERVER(NAME)?%", this.serverName).replaceAll("%C[12]+%", ""));
-		else
-		    engine.send("PRIVMSG #QuestHelp :"+(engine.config.getProperty("ascOutputPrefix")+outLine).replaceAll("%SERVER(NAME)?%", this.serverName));
+		    if (engine == null)
+			System.err.println(("%C1%[%C2%AWeSome %SERVERNAME%%C1%]: "+outLine).replaceAll("%SERVER(NAME)?%", this.serverName).replaceAll("%C[12]+%", ""));
+		    else
+			engine.send("PRIVMSG #QuestHelp :"+(engine.config.getProperty("ascOutputPrefix")+outLine).replaceAll("%SERVER(NAME)?%", this.serverName));
+		}
 	    }
-	    
 	    if (!sqlData.isEmpty()) {
 		for (Iterator<String> it = sqlData.iterator(); it.hasNext();) {
 		    PreparedStatement ps = null;

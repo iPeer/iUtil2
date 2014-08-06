@@ -149,7 +149,7 @@ public class Protocol {
 	    if (engine != null && channel.equals(engine.getIAL().getCurrentNick()))
 		channel = nick;
 	    
-	    String message = line.substring((line.indexOf(" :") + 2), line.length());
+	    String message = Matcher.quoteReplacement(line.substring((line.indexOf(" :") + 2), line.length()));
 	    
 	    // CTCPs
 	    
