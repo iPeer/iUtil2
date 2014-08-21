@@ -265,7 +265,7 @@ public class Protocol {
 			    }
 			    else
 				desc = ytdata.get("description").substring(0, Integer.valueOf((engine == null ? "140" : engine.config.getProperty("youtubeDescriptionLengthLimit"))));
-			    String description = (engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", desc+(desc.length() < ytdata.get("description").length() ? "..." : ""));
+			    String description = (engine == null ? "%C1%Description: %C2%%DESCRIPTION%" : engine.config.getProperty("youtubeInfoFormatDescription")).replaceAll("%DESCRIPTION%", Matcher.quoteReplacement(desc)+(desc.length() < ytdata.get("description").length() ? "..." : ""));
 			    if (engine == null)
 				System.err.println(description.replaceAll("%C([0-9]+)?%", ""));
 			    else
