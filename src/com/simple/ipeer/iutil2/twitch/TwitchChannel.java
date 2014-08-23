@@ -38,7 +38,8 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
     private long startupTime = 0L;
     
     public static void main(String[] args) throws IOException, SAXException, ParserConfigurationException {
-	TwitchChannel t = new TwitchChannel("anderzel", null, null);
+	TwitchChannel t = new TwitchChannel("blamethecontroller", null, null);
+	t.removeCache();
 	t.update();
     }
     
@@ -110,7 +111,7 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
 	    
 	    //System.err.println("NEW DATA: "+channel);
 	    
-	    String status = (String)channel.get("status");
+	    String status = ((String)channel.get("status")).replaceAll("\\n", " ").trim();
 	    String game = (String)channel.get("game");
 	    String userName = (String)channel.get("display_name");
 	    streamData.add(0, userName);
