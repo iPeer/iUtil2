@@ -87,10 +87,12 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
 		    Map<String, String> data = q.getData();
 		    String[] players = q.getPlayers();
 		    apiString += "'"+q.getInetAddress().getAddress()+":"+q.getInetAddress().getPort()+"'";
-		    for (String k : data.keySet()) {
+		    
+		    /*for (String k : data.keySet()) {
 			if (k.equals("plitnum")) { continue; }
 			apiString += (apiString.length() > 0 ? "," : "")+"'"+(k.equals("ping") ? data.get(k).replaceAll("ms", "") : data.get(k)).trim().replaceAll("\n", "{NEWLINE}").replaceAll("'", "''")+"'";
-		    }
+		    }*/
+		    apiString += ","+data.get("maxplayers")+",'"+data.get("plugins")+"','"+data.get("gametype")+"','"+data.get("game_id")+"','"+data.get("map")+"','"+data.get("hostname").replaceAll("\\n", "{NEWLINE}").replaceAll("'", "''")+"',"+data.get("numplayers")+",'"+data.get("ping").replaceAll("ms", "")+"','"+data.get("hostip")+"','"+data.get("hostport")+"','"+data.get("version")+"'";
 		    if (players.length > 0) {
 			apiString += ",'";
 			for (int x = 0; x < players.length; x++)
