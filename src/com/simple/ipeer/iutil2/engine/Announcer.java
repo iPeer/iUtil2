@@ -17,5 +17,6 @@ public interface Announcer {
 	public boolean isDead();
 	public String getThreadName();
 	public long getStartupTime();
+	public boolean addYTUser(String name, boolean isChannel);
 	
 }

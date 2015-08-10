@@ -248,5 +248,10 @@ public class MinecraftServiceStatus implements AnnouncerHandler, Runnable, Debug
     public long getStartupTime() {
 	return startupTime;
     }
+
+    @Override
+    public boolean addYTUser(String channel, boolean isUsername) {
+	return true;
+    }
     
 }

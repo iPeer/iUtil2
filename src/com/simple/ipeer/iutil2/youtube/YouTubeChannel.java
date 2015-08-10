@@ -1,305 +1,402 @@
 package com.simple.ipeer.iutil2.youtube;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.regex.Matcher;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
-
 import com.simple.ipeer.iutil2.engine.Announcer;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
-import java.net.HttpURLConnection;
+import com.simple.ipeer.iutil2.util.Util;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.UnknownHostException;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import javax.net.ssl.HttpsURLConnection;
+import javax.xml.datatype.DatatypeConfigurationException;
+import javax.xml.parsers.ParserConfigurationException;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONValue;
+import org.xml.sax.SAXException;
 
+/**
+ *
+ * @author iPeer
+ */
 public class YouTubeChannel implements Announcer, Runnable, DebuggableSub {
-    
-    private String channelName;
-    private String realChannelName;
-    private Thread thread;
-    private boolean isRunning = false;
+
+    private String CHANNEL_UPLOADS_PLAYLIST = "";
+    private String CHANNEL_REAL_NAME = "";
+    private String CHANNEL_ID = "";
     private long lastUpdate = 0L;
-    protected Main engine;
-    private YouTube youtube;
-    private LinkedHashMap<String, Upload> channelUploads;
-    private String lastUpload = "";
-    private boolean isSyncing = false;
-    private File cacheFile;
-    private boolean shouldUpdate = true;
+    private long startedAt = 0L;
     private long lastExceptionTime = 0L;
-    private Throwable lastException;
-    private long startupTime = 0L;
-    
-    public YouTubeChannel (String name, Main engine, YouTube youtube) {
-	this.channelName = this.realChannelName = name;
+    private Throwable lastException = null;
+    private boolean isRunning = false;
+    private LinkedList<String> channelUploads;
+    private boolean isSyncing = false;
+    private Thread thread;
+
+    protected Main engine;
+    protected YouTube youtube;
+
+    public YouTubeChannel(String c, Main engine, YouTube youtube) {
+	this(c, engine, youtube, false);
+    }
+
+    public YouTubeChannel(String c, Main engine, YouTube youtube, boolean isUsername) {
 	this.engine = engine;
 	this.youtube = youtube;
-	this.cacheFile = new File((engine == null ? "./YouTube" : engine.config.getProperty("youtubeDir")), "cache/"+this.channelName+".iuc");
-	this.channelUploads = loadCache();
-	//this.lastUpload = new Properties();
+	this.channelUploads = new LinkedList<String>();
+	if (!new File("./YouTube/Channels/", c + ".ytui").exists()) {
+	    this.createChannelInfo(c, isUsername);
+	} else {
+	    this.loadChannelDataFromFile(c);
+	}
+
     }
-    
-    public String getName() {
-	return this.channelName;
+
+    public void setChannelName(String cn) {
+	this.CHANNEL_REAL_NAME = cn;
     }
-    
-    public String getRealName() {
-	return this.realChannelName;
+
+    public void setChannelID(String cid) {
+	this.CHANNEL_ID = cid;
     }
-    
-    
-    public static void main(String[] args) {
-	YouTubeChannel c = new YouTubeChannel("TheiPeer", null, new YouTube(null));
-	c.clearUploads();
-	c.setSyncing(true);
-	c.start();
+
+    public void setChannelPlaylist(String plID) {
+	this.CHANNEL_UPLOADS_PLAYLIST = plID;
     }
-    
-    public void clearUploads() {
-	this.channelUploads.clear();
+
+    public static void main(String[] args) throws IOException {
+	/*File f = new File("./YouTube/");
+	 f.mkdirs();
+	 Util.writeEncrypted("[redacted]", new File(f, "YouTubeAPIKey.uic"));*/
+	YouTubeChannel yt = new YouTubeChannel("TheiPeer", null, null, true);
+	yt.update();
+	//yt.createChannelInfo("TheiPeer", true);
     }
-    
+
+    private void saveChannelDataToFile() throws IOException {
+	File cConfig = new File("./YouTube/Channels/", this.CHANNEL_ID + ".ytui");
+	JSONObject json = new JSONObject();
+	json.put("channelName", this.CHANNEL_REAL_NAME);
+	json.put("channelID", this.CHANNEL_ID);
+	json.put("uploadsPlaylist", this.CHANNEL_UPLOADS_PLAYLIST);
+	if (channelUploads.size() > 0) {
+	    JSONArray ja = new JSONArray();
+	    ja.addAll(channelUploads);
+	    json.put("recentUploads", ja);
+	}
+	FileWriter fw;
+	json.writeJSONString((fw = new FileWriter(cConfig)));
+	fw.flush();
+	fw.close();
+
+    }
+
+    private void loadChannelDataFromFile(String cID) {
+	File cConfig = new File("./YouTube/Channels/", cID + ".ytui");
+	try {
+	    JSONObject json = (JSONObject) JSONValue.parse(new FileReader(cConfig));
+	    this.CHANNEL_REAL_NAME = json.get("channelName").toString();
+	    this.CHANNEL_ID = json.get("channelID").toString();
+	    this.CHANNEL_UPLOADS_PLAYLIST = json.get("uploadsPlaylist").toString();
+	    if (json.containsKey("recentUploads")) {
+		JSONArray _json = (JSONArray) json.get("recentUploads");
+		for (Object o : _json.toArray()) {
+		    channelUploads.add(o.toString());
+		}
+	    }
+	} catch (FileNotFoundException ex) {
+	    // Should never be fired because we check it bfore this code is even tried :/
+	}
+
+    }
+
+    public final void createChannelInfo(String id, boolean isUsername) {
+	try {
+	    String apiKey = Util.readEncrypted(new File("./YouTube/YouTubeAPIKey.iuc"));
+	    HttpsURLConnection urlC = (HttpsURLConnection) new URL("https://www.googleapis.com/youtube/v3/channels?part=snippet%2CcontentDetails&" + (!isUsername ? "id" : "forUsername") + "=" + id + "&key=" + apiKey).openConnection();
+	    JSONObject json = (JSONObject) JSONValue.parse(new InputStreamReader(urlC.getInputStream()));
+	    System.err.println((json));
+	    JSONArray _json = (JSONArray) json.get("items");
+	    String cName = ((JSONObject) ((JSONObject) _json.get(0)).get("snippet")).get("title").toString();
+	    String cID = ((JSONObject) _json.get(0)).get("id").toString();
+	    String cUploads = ((JSONObject) ((JSONObject) ((JSONObject) _json.get(0)).get("contentDetails")).get("relatedPlaylists")).get("uploads").toString();
+	    //System.out.println(cName + " / " + cID + " / " + cUploads);
+	    File cConfig = new File("./YouTube/Channels/");
+	    cConfig.mkdirs();
+	    cConfig = new File(cConfig, cID + ".ytui");
+	    // Because JSON is awesome and totally not annoying in Java...
+	    JSONObject jo = new JSONObject();
+	    jo.put("channelName", cName);
+	    jo.put("channelID", cID);
+	    jo.put("uploadsPlaylist", cUploads);
+	    this.CHANNEL_ID = cID;
+	    this.CHANNEL_REAL_NAME = cName;
+	    this.CHANNEL_UPLOADS_PLAYLIST = cUploads;
+	    BufferedWriter bw = new BufferedWriter(new FileWriter(cConfig));
+	    jo.writeJSONString(bw);
+	    bw.flush();
+	    bw.close();
+	} catch (Throwable ex) {
+	    Logger.getLogger(YouTubeChannel.class.getName()).log(Level.SEVERE, null, ex);
+	}
+    }
+
     @Override
     public void run() {
 	while (this.isRunning && !this.thread.isInterrupted()) {
-	    youtube.syncChannelsIfNotSyncing();
+
 	    try {
-		if (shouldUpdate) {
-		    try {
-			update();
-		    } catch (Throwable e) {
-			if (engine == null) {
-			    System.err.println("Couldn't update YouTube uploads for user "+this.channelName);
-			    e.printStackTrace();
-			}
-			else {
-			    engine.log("Couldn't update YouTube uploads for user "+this.channelName);
-			    engine.logError(e, "YouTube", this.channelName);
-			}
-		    }
-		    lastUpdate = System.currentTimeMillis();
-		}
-		else
-		    this.shouldUpdate(true);
+
+		youtube.syncChannelsIfNotSyncing();
+
+		update();
+
+		this.lastUpdate = System.currentTimeMillis();
+
+	    } catch (IOException ex) {
+		engine.log(("Couldn't update YouTube thread for channel ID " + this.CHANNEL_ID));
+		engine.logError(ex, "YouTube", this.CHANNEL_ID, this.CHANNEL_REAL_NAME, this.CHANNEL_UPLOADS_PLAYLIST);
+		this.lastException = ex;
+		this.lastExceptionTime = System.currentTimeMillis();
+	    }
+	    try {
 		Thread.sleep((engine == null ? 600000 : Long.valueOf(engine.config.getProperty("youtubeUpdateDelay"))));
-	    }
-	    catch (InterruptedException e) { }
-	    catch (Exception e) {
-		if (engine == null) {
-		    System.err.println("["+this.channelName+"] Cannot update!");
-		    e.printStackTrace();
-		} else {
-		    engine.log("["+this.channelName+"] Cannot update!", "YouTube");
-		    engine.logError(e, "YouTube", this.channelName);
-		}
-		lastException = e;
-		lastExceptionTime = System.currentTimeMillis();
+	    } catch (InterruptedException ex) {
+		this.isRunning = false;
+		youtube.addToSync(this);
+		engine.log(("Couldn't sleep YouTube thread for channel ID " + this.CHANNEL_ID));
+		engine.logError(ex, "YouTube", this.CHANNEL_ID, this.CHANNEL_REAL_NAME, this.CHANNEL_UPLOADS_PLAYLIST);
+		this.lastException = ex;
+		this.lastExceptionTime = System.currentTimeMillis();
 	    }
 	}
-	if (engine != null)
-	    engine.log("YouTube thread for user "+this.channelName+" ("+this.realChannelName+") is stopping.", "YouTube");
     }
-    
+
     @Override
-    public void update() throws IOException, ParserConfigurationException, SAXException {
-	LinkedList<Upload> announce = new LinkedList<Upload>();
-	
-	DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-	DocumentBuilder builder = factory.newDocumentBuilder();
-	Document doc = builder.newDocument();
-	HttpURLConnection conn = (HttpURLConnection)(new URL("https://gdata.youtube.com/feeds/api/users/"+this.channelName+"/uploads")).openConnection();
-	conn.setReadTimeout(Integer.parseInt(engine.config.getProperty("youtubeChannelUpdateTimeout", "5000")));
-	doc = builder.parse(conn.getInputStream());
-	Element element = doc.getDocumentElement();
-	element.normalize();
-	
-	NodeList uploads = element.getElementsByTagName("entry");
-	for (int x = 0; x < uploads.getLength() - 1; x++) {
-	    NodeList data = uploads.item(x).getChildNodes();
-	    String videoID = data.item(0).getChildNodes().item(0).getNodeValue().replaceAll("https?://gdata.youtube.com/feeds/api/videos/", "");
-	    if (this.channelUploads.containsKey(videoID) || videoID.equals(this.lastUpload) || x > Integer.valueOf((this.isSyncing ? "0" : engine.config.getProperty("youtubeMaxUploads"))))
-		break;
-	    try {
-		String author = ((Element)data).getElementsByTagName("author").item(0).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();
-		if (!this.realChannelName.equals(author))
-		    this.realChannelName = author;
-	    }
-	    catch (NullPointerException e) { }
-	    String title = ((Element)data).getElementsByTagName("title").item(0).getChildNodes().item(0).getNodeValue();
-	    int duration = Integer.valueOf(((Element)data).getElementsByTagName("yt:duration").item(0).getAttributes().getNamedItem("seconds").getNodeValue());
-	    if (!channelUploads.containsKey(videoID)) {
-		Upload u = new Upload(title, duration, videoID);
-		channelUploads.put(videoID, u);
-		while (channelUploads.size() > (engine == null ? 10 : Integer.valueOf(engine.config.getProperty("youtubeMaxHistory"))))
-		    channelUploads.remove(channelUploads.keySet().iterator().next());
-		announce.add(u);
-	    }
-	}
-	if (this.isSyncing)
-	    this.isSyncing = false;
-	if (!announce.isEmpty()) {
-	    lastUpload = announce.get(0).getID();
-	    saveCache();
-	    announce(announce);
-	}
-	
-    }
-    
-    public void saveCache() throws FileNotFoundException, IOException {
-	if (this.cacheFile.exists())
-	    this.cacheFile.delete();
-	BufferedWriter c = new BufferedWriter(new FileWriter(this.cacheFile));
-	c.write(lastUpload+"\n");
-	if (!channelUploads.isEmpty())
-	{
-	    for (String d : channelUploads.keySet()) {
-		Upload e = channelUploads.get(d);
-		c.write(e.getID()+"\01"+e.getLength()+"\01"+e.getTitle()+"\n");
-	    }
-	    c.close();
-	    
-	}
-    }
-    
-    public LinkedHashMap<String, Upload> loadCache() {
+    public void update() throws IOException {
+
+	String apiKey = Util.readEncrypted(new File("./YouTube/YouTubeAPIKey.iuc"));
+
 	try {
-	    BufferedReader b = new BufferedReader(new FileReader(this.cacheFile));
-	    String line = null;
-	    LinkedHashMap<String, Upload> c = new LinkedHashMap<String, Upload>();
-	    while ((line = b.readLine()) != null) {
-		
-		if (this.lastUpload.equals("") || this.lastUpload == null)
-		    this.lastUpload = line.trim();
-		else {
-		    String[] data = line.split("\01");
-		    c.put(data[0], new Upload(data[2], data[1], data[0]));
+	    // Behold, the amazingness of the YouTube v3 API that forces you to make AT LEAST 2 calls to get any decent video information
+
+	    // Get a list of video IDs we need to look up
+	    HttpsURLConnection urlC = (HttpsURLConnection) new URL("https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=" + this.CHANNEL_UPLOADS_PLAYLIST + "&key=" + apiKey).openConnection();
+	    JSONObject json = (JSONObject) JSONValue.parse(new InputStreamReader(urlC.getInputStream()));
+	    int num = 1;
+	    LinkedList<String> idsToAnnounce = new LinkedList<String>();
+	    JSONArray jsonArray = (JSONArray) json.get("items");
+	    System.err.println(jsonArray.size() + " objects.");
+	    for (int x = 0; x < jsonArray.size(); x++) {
+
+		JSONObject _json = (JSONObject) (jsonArray.get(x));
+
+		String videoID = ((JSONObject) _json.get("contentDetails")).get("videoId").toString();
+		System.err.println(channelUploads.contains(videoID));
+		if (channelUploads.contains(videoID) || num > (this.isSyncing ? 1 : (this.engine == null ? 5 : Integer.parseInt(engine.config.getProperty("youtubeMaxUploads"))))) {
+		    break;
 		}
-		
+
+		idsToAnnounce.add(videoID);
+
+		num++;
+
 	    }
-	    b.close();
-	    //a.delete();
-	    return c;
+
+	    //System.err.println(idsToAnnounce.size() + " uploads to announce");
+	    // Now we have a list of IDs, we need to announce them.
+	    // Prepare a list of IDs so we can request them all at once.
+	    // I separated these 2 loops for easy maintenance.
+	    if (idsToAnnounce.size() > 0) {
+
+		String videoIDs = "";
+
+		for (Iterator<String> it = idsToAnnounce.iterator(); it.hasNext();) {
+
+		    String videoID = it.next();
+		    channelUploads.add(videoID);
+		    while (channelUploads.size() > (engine == null ? 10 : Integer.valueOf(engine.config.getProperty("youtubeMaxHistory")))) {
+			channelUploads.remove(channelUploads.iterator().next());
+		    }
+
+		    videoIDs = videoIDs + (videoIDs.length() > 0 ? "," : "") + videoID;
+		    it.remove();
+
+		}
+
+		//System.out.println(videoIDs);
+		// Request the data and announce the uploads!
+		HttpsURLConnection _urlC = (HttpsURLConnection) new URL("https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails&id=" + videoIDs + "&key=" + apiKey).openConnection();
+		JSONObject _json = (JSONObject) JSONValue.parse(new InputStreamReader(_urlC.getInputStream()));
+		JSONArray _jsonArray = (JSONArray) _json.get("items");
+
+		LinkedList<Upload> uploads = new LinkedList<Upload>();
+
+		for (int _x = 0; _x < _jsonArray.size(); _x++) {
+
+		    JSONObject _jo = (JSONObject) _jsonArray.get(_x);
+
+		    //System.out.println(_jo);
+		    String videoID = _jo.get("id").toString();
+		    JSONObject __jo = (JSONObject) _jo.get("snippet");
+		    String channelName = __jo.get("channelTitle").toString();
+		    String videoTitle = __jo.get("title").toString();
+		    __jo = (JSONObject) _jo.get("contentDetails");
+		    String videoLength = __jo.get("duration").toString();
+		    //if (_x < Integer.valueOf((this.isSyncing ? "0" : engine.config.getProperty("youtubeMaxUploads")))) {
+		    uploads.add(new Upload(videoTitle, videoLength, videoID));
+			//}
+
+		    //System.out.println(channelName + " just uploaded a video: " + videoTitle + " [" + videoLength + "] -- https://youtu.be/" + videoID);
+		}
+
+		announce(uploads);
+
+		saveChannelDataToFile();
+
+		if (this.isSyncing) {
+		    this.isSyncing = false;
+		}
+
+	    }
+
+	} catch (MalformedURLException ex) {
+	    this.lastException = ex;
+	    this.lastExceptionTime = System.currentTimeMillis();
+	    Logger.getLogger(YouTubeChannel.class.getName()).log(Level.SEVERE, null, ex);
 	}
-	catch (IOException e) {
-	    return new LinkedHashMap<String, Upload>();
-	}
+
     }
-    
-    @Override
-    public long timeTilUpdate() {
-	return (lastUpdate + Long.valueOf(engine.config.getProperty("youtubeUpdateDelay"))) - System.currentTimeMillis();
-    }
-    
+
     public void announce(LinkedList<Upload> uploads) {
 	Iterator<Upload> it = uploads.iterator();
 	while (it.hasNext()) {
 	    Upload u = it.next();
 	    String title = u.getTitle();
 	    String vid = u.getID();
-	    
-	    int len = u.getLength();
-	    
-	    String time = youtube.formatTime(len);
-	    
+
+	    //int len = u.getLength();
+	    String time = u.getLength().replace("PT", "");
+	    try {
+		time = this.youtube.formatTime(u.getLength());
+	    } catch (DatatypeConfigurationException ex) {
+		Logger.getLogger(YouTubeChannel.class.getName()).log(Level.SEVERE, null, ex);
+	    }
+
 	    String out = (engine == null ? "%C2%%USER% %C1%uploaded a video: %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1] %DASH% %C2%%VIDEOLINK%" : engine.config.getProperty("youtubeAnnounceFormat"))
 		    .replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(title)) // Fix for "Illegal group reference" when title contains regex characters such as $.
 		    .replaceAll("(%(VIDEO)?(LENGTH|DURATION)%)", time)
-		    .replaceAll("%USER%", this.realChannelName)
-		    .replaceAll("%VIDEOLINK%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix")+vid));
-	    if (engine == null)
+		    .replaceAll("%USER%", this.CHANNEL_REAL_NAME)
+		    .replaceAll("%VIDEOLINK%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix") + vid));
+	    if (engine == null) {
 		System.err.println(out);
-	    else
+	    } else {
 		engine.amsg(out);
+	    }
 	}
     }
-    
+
+    public void setSyncing(boolean v) {
+	this.isSyncing = v;
+    }
+
+    public String getName() {
+	return this.CHANNEL_ID;
+    }
+
+    @Override
+    public long timeTilUpdate() {
+	return (lastUpdate + Long.valueOf(engine.config.getProperty("youtubeUpdateDelay"))) - System.currentTimeMillis();
+    }
+
     @Override
     public void stop() {
-	if (engine != null)
-	    engine.log("YouTube Announcer Thread "+this.channelName+" is stopping", "YouTube");
 	this.isRunning = false;
-	(this.thread).interrupt();
     }
-    
+
     @Override
     public void start() {
-	startupTime = System.currentTimeMillis();
-	if (engine != null)
-	    engine.log("YouTube Announcer Thread "+this.channelName+" is starting", "YouTube");
-	this.thread = new Thread(this, "YouTube Announcer Thread ("+this.channelName+")");
+	if (this.isRunning) {
+	    return;
+	}
 	this.isRunning = true;
-	(this.thread).start();
+	this.startedAt = System.currentTimeMillis();
+	if (engine != null) {
+	    engine.log("YouTube Announcer Thread " + this.CHANNEL_ID + " (" + this.CHANNEL_REAL_NAME + ") is starting", "YouTube");
+	}
+	this.thread = new Thread(this, "YouTube Announcer Thread (" + this.CHANNEL_ID + " [" + this.CHANNEL_REAL_NAME + "])");
+	this.thread.start();
     }
-    
-    public void stopIfRunning() {
-	if (this.isRunning)
-	    stop();
-    }
-    
+
+    @Override
     public void startIfNotRunning() {
 	if (!this.isRunning) {
-	    start();
+	    this.start();
 	}
     }
-    
-    public void setSyncing(boolean b) {
-	this.isSyncing = b;
-    }
-    
+
+    @Override
     public void removeCache() {
-	if (this.cacheFile.exists()) {
-	    if (!this.cacheFile.delete())
-		this.cacheFile.deleteOnExit();
+    }
+
+    @Override
+    public void stopIfRunning() {
+	if (this.isRunning) {
+	    this.stop();
 	}
     }
-    
+
+    @Override
     public void shouldUpdate(boolean b) {
-	this.shouldUpdate = b;
     }
-    
+
     @Override
     public boolean isDead() {
-	return timeTilUpdate() < 0;
+	return false;
     }
-    
+
     @Override
     public String getThreadName() {
-	return this.thread.getName();
-    }
-
-    @Override
-    public Throwable getLastExeption() {
-	return this.lastException;
-    }
-
-    @Override
-    public long getLastExceptionTime() {
-	return this.lastExceptionTime;
-    }
-
-    @Override
-    public long getLastUpdateTime() {
-	return this.lastUpdate;
+	return "YouTube_Update-" + this.CHANNEL_ID;
     }
 
     @Override
     public long getStartupTime() {
-	return this.startupTime;
+	return startedAt;
     }
-    
+
+    @Override
+    public Throwable getLastExeption() {
+	return lastException;
+    }
+
+    @Override
+    public long getLastExceptionTime() {
+	return lastExceptionTime;
+    }
+
+    @Override
+    public long getLastUpdateTime() {
+	return lastUpdate;
+    }
+
+    @Override
+    public boolean addYTUser(String s, boolean b) {
+	return true;
+    }
+
 }

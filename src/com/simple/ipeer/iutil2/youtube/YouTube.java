@@ -1,64 +1,55 @@
 package com.simple.ipeer.iutil2.youtube;
 
 import com.simple.ipeer.iutil2.engine.Announcer;
+import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
+import com.simple.ipeer.iutil2.engine.Debuggable;
+import com.simple.ipeer.iutil2.engine.DebuggableSub;
+import com.simple.ipeer.iutil2.engine.Main;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.SocketTimeoutException;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.text.NumberFormat;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import java.util.regex.Matcher;
+import javax.xml.datatype.DatatypeConfigurationException;
+import javax.xml.datatype.DatatypeFactory;
+import javax.xml.datatype.Duration;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONValue;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
-
-import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
-import com.simple.ipeer.iutil2.engine.Debuggable;
-import com.simple.ipeer.iutil2.engine.DebuggableSub;
-import com.simple.ipeer.iutil2.engine.Main;
-import java.io.FileWriter;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+/**
+ *
+ * @author iPeer
+ */
 public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
-    
-    public HashMap<String, YouTubeChannel> CHANNEL_LIST;
-    protected Main engine;
-    public List<YouTubeChannel> waitingToSync = new ArrayList<YouTubeChannel>();
-    private boolean hasStarted = false;
-    private static YouTube youtubeInstance;
-    private boolean isSyncing = false;
-    private boolean startingDead = false;
-    private long lastForcedUpdate = 0L;
-    private Throwable lastException;
-    private long lastExceptionTime = 0L;
+
+    protected YouTube instance;
+    private Main engine;
     private List<Announcer> announcerList = new ArrayList<Announcer>();
-    
-    public YouTube(Main engine) {
-	if (engine != null)
-	    engine.log("YouTube announcer is starting up.", "YouTube");
-	this.engine = engine;
-	if (engine != null) {
+    private HashMap<String, YouTubeChannel> CHANNEL_LIST = new HashMap<String, YouTubeChannel>();
+    private File channelFileDir;
+    private long lastUpdateTime = 0L;
+    private long lastExceptionTime = 0L;
+    private Throwable lastException;
+    private LinkedList<YouTubeChannel> waitingToSync = new LinkedList<YouTubeChannel>();
+    private boolean isSyncing = false;
+
+    public YouTube(Main main) {
+
+	this.engine = main;
+	this.instance = this;
+
+	if (this.engine != null) {
 	    HashMap<String, String> settings = new HashMap<String, String>();
-	    
+
 	    // Announcer settings
-	    
 	    settings.put("youtubeUpdateDelay", "600000");
 	    settings.put("youtubeAnnounceFormat", "%C2%%USER% %C1%uploaded a video: %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] %DASH% %C2%%VIDEOLINK%");
 	    settings.put("youtubeTitleBlacklist", "(live)?stream(ing)?");
@@ -66,9 +57,8 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	    settings.put("youtubeURLPrefix", "https://youtu.be/");
 	    settings.put("youtubeMaxUploads", "5");
 	    settings.put("youtubeMaxHistory", "10");
-	    
+
 	    // Link info settings
-	    
 	    settings.put("youtubeInfoFormat", "%C1%[%C2%%USER%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] (%C2%%VIEWS%%C1% views, %C2%%COMMENTS%%C1% comments, %C2%%LIKES%%C1% likes, %C2%%DISLIKES%%C1% dislikes) %DASH% %C2%%VIDEOURL%");
 	    settings.put("youtubeInfoFormatDescription", "%C1%Description: %C2%%DESCRIPTION%");
 	    settings.put("youtubeDescriptionClippingMode", "word");
@@ -76,361 +66,176 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	    settings.put("youtubeLinkRegex", ".*https?://(www.)?youtu(be.com|.be)/(watch\\?v=)?.*");
 	    settings.put("youtubeGetIDRegex", "(?<=https?://(www.)?youtu(be.com|.be)/(watch\\?v=)?)[^=]*?( |$)"); // Deprecated
 	    settings.put("youtubeDescriptionLengthLimit", "140");
-	    
+
 	    // Search settings
-	    
 	    settings.put("youtubeSearchDescriptions", "false"); // Should descriptions be shown when a user searches for videos?
-	    settings.put("youtubeMaxSearchResults",  "1");
+	    settings.put("youtubeMaxSearchResults", "1");
 	    settings.put("youtubeSearchFormat", "%C1%[%C2%%AUTHOR%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] %DASH% %C2%%VIDEOURL%");
 	    settings.put("youtubeCountryCode", "GB");
-	    
+
 	    // Other settings
-	    
 	    settings.put("youtubeRestartDeadThreads", "true");
 	    settings.put("youtubeChannelUpdateTimeout", "5000");
-	    
-	    
+
 	    engine.createConfigDefaults(settings);
-	    
-	    File youtubeDir = new File(engine.config.getProperty("youtubeDir"));
-	    if (!youtubeDir.exists()) {
-		youtubeDir.mkdirs();
-		new File(youtubeDir, "cache").mkdirs();
-		new File(youtubeDir, "config").mkdirs();
-	    }
-	    loadChannels();
-	    engine.log("YouTube announcer started up succesfully.", "YouTube");
-	    youtubeInstance = this;
 	}
+
+	File youtubeDir = new File((this.engine == null ? "./YouTube/" : engine.config.getProperty("youtubeDir")));
+	File configDir = new File(youtubeDir, "/config/");
+	File usrnFile = new File(configDir, "usernames.cfg");
+	channelFileDir = new File(youtubeDir, "/Channels/");
+	channelFileDir.mkdirs();
+
+	// Does the usernames.cfg file exist? If so, we should load legacy channels into the new system (expensive on API calls though D:)
+	if (usrnFile.exists()) {
+	    this.loadLegacyChannels(usrnFile);
+	} else {
+	    this.loadChannels();
+	}
+
     }
-    
-    public void loadChannels() {
-	CHANNEL_LIST = new HashMap<String, YouTubeChannel>();
-	File a = new File(new File(engine.config.getProperty("youtubeDir"), "config"), "usernames.cfg");
-	String[] channels = "TheiPeer,GuudeBoulderfist,EthosLab,Docm77,BdoubleO100,VintageBeef,GenerikB".split(",");
-	
-	if (a.exists()) {
-	    try {
-		Properties b = new Properties();
-		b.load(new FileInputStream(a));
-		channels = b.getProperty("users").split(",");
+
+    public static void main(String[] args) {
+	YouTube yt = new YouTube(null);
+
+    }
+
+    public final void loadLegacyChannels(File file) {
+	Properties channels = new Properties();
+	try {
+	    channels.load(new FileInputStream(file));
+	    String[] channelList = channels.getProperty("users").split(",");
+	    for (String c : channelList) {
+		YouTubeChannel ytc = new YouTubeChannel(c, this.engine, this, true); // Always assume this is a username
+		ytc.setSyncing(true);
+		//ytc.startIfNotRunning();
+		announcerList.add(ytc);
+		this.CHANNEL_LIST.put(ytc.getName(), ytc);
 	    }
-	    catch (Exception e) {
-		lastException = e;
-		lastExceptionTime = System.currentTimeMillis();
-		engine.log("Couldn't load username list!", "YouTube");
+	    if (!file.delete()) {
+		file.deleteOnExit();
+	    }
+	    if (this.engine == null) {
+		System.err.println("Loaded legacy usernames!");
+	    } else {
+		engine.log("Loaded legacy usernames!", "YouTube");
+	    }
+	} catch (Exception e) {
+	    this.lastException = e;
+	    this.lastExceptionTime = System.currentTimeMillis();
+	    if (this.engine == null) {
+		System.err.println("Couldn't load legacy usernames!");
+		e.printStackTrace();
+	    } else {
+		engine.log("Couldn't load legacy usernames!", "YouTube");
 		engine.logError(e, "YouTube");
 	    }
 	}
-	for (String c : channels) {
-	    YouTubeChannel d = new YouTubeChannel(c, engine, this);
-	    announcerList.add(d);
-	    d.setSyncing(true); // Stops the bot spamming the hell out of channels after downtime or accidental cache invalidation.
-	    //d.startIfNotRunning();
-	    //waitingToSync.add(d);
-	    CHANNEL_LIST.put(c.toLowerCase(), d);
-	}
-	
     }
-    
-    public void saveChannels() {
+
+    public final void loadChannels() {
 	try {
-	    File a = new File(new File(engine.config.getProperty("youtubeDir"), "config"), "usernames.cfg");
-	    String users = "";
-	    for (YouTubeChannel c : this.CHANNEL_LIST.values())
-		users = users+c.getName()+",";
-	    Properties b = new Properties();
-	    b.setProperty("users", users);
-	    b.store(new FileOutputStream(a), "YouTube Username Cache File");
-	}
-	catch (Exception e) {
-	    if (engine != null)
-		engine.log("Couldn't save youtube username list!", "YouTube");
-	    engine.logError(e, "YouTube");
-	    lastException = e;
-	    lastExceptionTime = System.currentTimeMillis();
-	}
-    }
-    
-    public void stopAll() {
-	for (YouTubeChannel c : CHANNEL_LIST.values()) {
-	    if (engine != null)
-		engine.log("Stopping YouTube thread for user "+c.getName(), "YouTube");
-	    c.stop();
-	}
-    }
-    
-    public void startAll() {
-	//		if (announcerHelper == null) {
-	//			announcerHelper = new AnnouncerHelper(this, "YouTube", engine, 900000);
-	//			announcerHelper.start();
-	//		}
-	for (YouTubeChannel c : CHANNEL_LIST.values()) {
-	    c.startIfNotRunning();
-	}
-    }
-    
-    public void startIfNotRunning() {
-	if (!this.hasStarted) {
-	    engine.log("Upload announcer is starting.", "YouTube");
-	    loadChannels();
-	}
-    }
-    
-    @Override
-    public boolean addUser(String name) {
-	if (this.CHANNEL_LIST.containsKey(name.toLowerCase()))
-	    return false;
-	try {
-	    YouTubeChannel a = new YouTubeChannel(name, engine, this);
-	    announcerList.add(a);
-	    a.setSyncing(true);
-	    a.update();
-	    this.CHANNEL_LIST.put(name.toLowerCase(), a);
-	    this.waitingToSync.add(a);
-	} catch (Throwable ex) {
-	    lastException = ex;
-	    lastExceptionTime = System.currentTimeMillis();
-	    engine.log("Couldn't add user "+name+" to YouTube watch list due to error. See error log for details", "YouTube");
-	    engine.logError(ex, "YouTube", name);
-	    throw new RuntimeException("Couldn't add user to watch list: "+ex.toString()+" @ "+ex.getStackTrace()[0]);
-	}
-	saveChannels();
-	if (engine != null)
-	    engine.log("User "+name+" succesfully added to users list and is waiting to sync.", "YouTube");
-	return true;
-    }
-    
-    @Override
-    public boolean removeUser(String name) {
-	if (this.CHANNEL_LIST.containsKey(name.toLowerCase())) {
-	    if (!this.waitingToSync.isEmpty()) {
-		Iterator<YouTubeChannel> it = this.waitingToSync.iterator();
-		while (it.hasNext())
-		    if (it.next().getName().toLowerCase().equals(name.toLowerCase())) {
-			it.remove();
-			if (engine != null)
-			    engine.log(name+" was waiting to sync, but its removal is being requested.", "YouTube");
-		    }
+	    if (this.engine == null) {
+		System.err.println("Loading channels...");
+	    } else {
+		engine.log("Loading channels...", "YouTube");
 	    }
-	    YouTubeChannel c = this.CHANNEL_LIST.get(name.toLowerCase());
-	    announcerList.remove(c);
-	    c.removeCache();
-	    c.stopIfRunning();
-	    this.CHANNEL_LIST.remove(name.toLowerCase());
-	    saveChannels();
-	    return true;
-	}
-	return false;
-    }
-    
-    @Override
-    public void updateAll() {
-	for (YouTubeChannel c : this.CHANNEL_LIST.values())
-	    try {
-		c.update();
-	    } catch (Throwable ex) {
-		engine.logError(ex, "YouTube");
-		engine.log("Couldn't update channel "+c.getName()+" due to error. See error log for details.", "Twitch");
+	    File[] files = this.channelFileDir.listFiles();
+	    for (File f : files) {
+		if (f.getName().equals(".") || f.getName().equals("..")) {
+		    continue;
+		} // NetBeans says this is unneeded, but testing suggests otherwise.
+		engine.log("Loading channel data from '" + f + "'", "YouTube");
+		JSONObject json = (JSONObject) JSONValue.parse(new FileReader(f));
+		String channelID = json.get("channelID").toString();
+		YouTubeChannel ytc = new YouTubeChannel(channelID, this.engine, this, false); // Should NEVER be a username!
+		ytc.setSyncing(true);
+		//ytc.startIfNotRunning();
+		this.announcerList.add(ytc);
+		this.CHANNEL_LIST.put(channelID, ytc);
+
 	    }
-	lastForcedUpdate = System.currentTimeMillis();
-    }
-    
-    @Override
-    public void update(String name) {
-	if (this.CHANNEL_LIST.containsKey(name.toLowerCase()))
-	    try {
-		this.CHANNEL_LIST.get(name.toLowerCase()).update();
-	    } catch (Throwable ex) {
-		engine.logError(ex, "YouTube");
-		engine.log("Couldn't update channel "+name.toLowerCase()+" due to error. See error log for details.", "Twitch");
+	    if (this.engine == null) {
+		System.err.println(this.announcerList.size() + " channel(s) loaded!");
+	    } else {
+		engine.log(this.announcerList.size() + " channel(s) loaded!", "YouTube");
 	    }
-    }
-    
-    @Override
-    public long timeTilUpdate() {
-	return this.CHANNEL_LIST.values().iterator().next().timeTilUpdate();
-    }
-    
-    public HashMap<String, String> getVideoInfo(String videoid) throws SAXException, IOException, ParserConfigurationException {
-	//https://gdata.youtube.com/feeds/api/videos/ZeGXGYSTOtc
-	HashMap<String, String> data = new HashMap<String, String>();
-	DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-	String URL = "https://gdata.youtube.com/feeds/api/videos/"+videoid+"?v=2";
-	DocumentBuilder a = f.newDocumentBuilder();
-	Document doc = a.newDocument();
-	doc = a.parse(URL);
-	Element e = doc.getDocumentElement();
-	e.normalize();
-	
-	//NodeList data = e.getElementsByTagName("entry");
-	String title = e.getElementsByTagName("title").item(0).getFirstChild().getNodeValue();
-	String desc = "";
-	try {
-	    desc = e.getElementsByTagName("media:description").item(0).getFirstChild().getNodeValue().replaceAll("\n+", " ");
-	} catch (NullPointerException e1) { }
-	String likes = "0", dislikes = "0";
-	try {
-	    NamedNodeMap li = e.getElementsByTagName("yt:rating").item(0).getAttributes();
-	    dislikes = NumberFormat.getInstance().format(Integer.valueOf(li.getNamedItem("numDislikes").toString().replaceAll("numDislikes=|\"", "")));
-	    likes = NumberFormat.getInstance().format(Integer.valueOf(li.getNamedItem("numLikes").toString().replaceAll("numLikes=|\"", "")));
-	} catch (NullPointerException e1) { }
-	String comments = "0";
-	try {
-	    comments = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("gd:feedLink").item(0).getAttributes().getNamedItem("countHint").toString().replaceAll("countHint=|\"", "")));
-	} catch (NullPointerException e1) { }
-	String views = "0";
-	try {
-	    views = NumberFormat.getInstance().format(Integer.valueOf(e.getElementsByTagName("yt:statistics").item(0).getAttributes().getNamedItem("viewCount").toString().replaceAll("viewCount=|\"", "")));
-	} catch (NullPointerException e1) { }
-	String duration = e.getElementsByTagName("yt:duration").item(0).getAttributes().getNamedItem("seconds").toString().replaceAll("seconds=|\"", "");
-	String author = e.getElementsByTagName("name").item(0).getFirstChild().getNodeValue();
-	
-	data.put("title", title);
-	if (desc.length() > 0)
-	    data.put("description", desc);
-	data.put("dislikes", dislikes);
-	data.put("likes", likes);
-	data.put("comments",  comments);
-	data.put("views", views);
-	data.put("duration", (duration.equals("0") ? "LIVE" : formatTime(duration)));
-	data.put("durationSeconds", duration);
-	data.put("author", author);
-	return data;
-    }
-    
-        public static void main(String[] args) {
-	    
-	    YouTube y = new YouTube(null);
-	    HashMap<String, String> a = y.getPlaylistInfo("PLFBE-zpkRFKQJhfOlW7XABazzbUouc-XV");
-	    
-	    for (String b : a.keySet())
-		System.err.println(b+": "+a.get(b));
-	
-//	try {
-//	    YouTube y = new YouTube(null);
-//	    HashMap<String, String> a = y.getVideoInfo("kMu9cAK2pwo");
-//	    for (String b : a.keySet()) {
-//		System.err.println(b+": "+a.get(b));
-//	    }
-//	} catch (Throwable e) {
-//	    e.printStackTrace();
-//	}
-	
-    }
-    
-    public HashMap<String, String> getPlaylistInfo(String plID) {
-	HashMap<String, String> data = new HashMap<String, String>();
-	try {
-	    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-	    String URL = "https://gdata.youtube.com/feeds/api/playlists/"+plID+"?v=2";
-	    DocumentBuilder a = f.newDocumentBuilder();
-	    Document doc = a.newDocument();
-	    doc = a.parse(URL);
-	    Element e = doc.getDocumentElement();
-	    e.normalize();
-	    
-	    String playlistAuthor = ((Element)e.getElementsByTagName("author").item(0).getChildNodes()).getElementsByTagName("name").item(0).getChildNodes().item(0).getNodeValue();
-	    String playlistName =  e.getElementsByTagName("title").item(0).getChildNodes().item(0).getNodeValue();
-	    String numVideos = e.getElementsByTagName("openSearch:totalResults").item(0).getChildNodes().item(0).getNodeValue();
-	    
-	    data.put("playlistAuthor", playlistAuthor);
-	    data.put("playlistName", Matcher.quoteReplacement(playlistName));
-	    data.put("videoCount", numVideos);
-	    data.put("playlistID", plID);
-	    
-	} catch (Throwable ex) {
-	    engine.logError(ex, "YouTube", plID);
-	    data.put("error", "Couldn't acquire data for playlist ID '"+plID+"' ("+ex.getClass()+(ex.getClass().toString().equals("class java.io.FileNotFoundException") ? " / Invalid Playlist" : "")+")");
-	    data.put("errorTrace", ex.toString()+" @ "+ex.getStackTrace()[0]);
-	}
-	return data;
-    }
-    
-    public String formatTime(String seconds) {
-	return formatTime(Integer.valueOf(seconds));
-    }
-    
-    public String formatTime(int len) {
-	int seconds = len % 60;
-	int minutes = len / 60;
-	int hours = (int)Math.floor(minutes / 60);
-	if (hours > 0)
-	    minutes -= hours*60;
-	return (hours > 0 ? String.format("%02d", hours)+":" : "")+String.format("%02d", minutes)+":"+String.format("%02d", seconds);
-    }
-    
-    public LinkedList<YouTubeSearchResult> getSearchResults(String query) throws SAXException, IOException, ParserConfigurationException {
-	return getSearchResults(query, 0);
-    }
-    
-    public LinkedList<YouTubeSearchResult> getSearchResults(String query, int retries) throws SAXException, IOException, ParserConfigurationException {
-	
-	DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-	DocumentBuilder builder = factory.newDocumentBuilder();
-	Document doc = builder.newDocument();
-	HttpURLConnection conn = (HttpURLConnection)(new URL("https://gdata.youtube.com/feeds/api/videos?q="+URLEncoder.encode(query, "UTF-8" /* ISO-8859-1 */)+"&v=2&safeSearch=none&max-results="+(engine == null ? "1" : Integer.valueOf(engine.config.getProperty("youtubeMaxSearchResults")))+"&restriction="+(engine == null ? "GB" : engine.config.getProperty("youtubeCountryCode"))).openConnection());
-	conn.setReadTimeout(2500);
-	try {
-	    doc = builder.parse(conn.getInputStream());
-	}
-	catch (SocketTimeoutException e) {
-	    if (retries < 5) { // Infinite loop prevention
-		System.err.println("Retry #"+(retries + 1));
-		return getSearchResults(query, retries++);
+	} catch (Throwable e) {
+	    this.lastException = e;
+	    this.lastExceptionTime = System.currentTimeMillis();
+	    if (this.engine == null) {
+		System.err.println("Couldn't load usernames!");
+		e.printStackTrace();
+	    } else {
+		engine.log("Couldn't load usernames!", "YouTube");
+		engine.logError(e, "YouTube");
 	    }
-	    else
-		throw new RuntimeException("The server did not respond within 5 tries.");
 	}
-	Element element = doc.getDocumentElement();
-	element.normalize();
-	NodeList entries;
-	if ((entries = element.getElementsByTagName("entry")).getLength() < 1)
-	    throw new RuntimeException("No videos found for '"+query+"'");
-	LinkedList<YouTubeSearchResult> data = new LinkedList<YouTubeSearchResult>();
-	for (int x = 0; x < entries.getLength(); x++) {
-	    NodeList d = entries.item(x).getChildNodes();
-	    int length, views, likes, dislikes, comments;
-	    length = likes = dislikes = length = comments = views = 0;
-	    String title, author, description, videoID;
-	    title = author = description = videoID = "";
-	    
-	    // Don't need to check these for null as they should never be empty
-	    
-	    author = ((Element)d).getElementsByTagName("author").item(0).getChildNodes().item(0).getChildNodes().item(0).getNodeValue();
-	    title = ((Element)d).getElementsByTagName("title").item(0).getChildNodes().item(0).getNodeValue();
-	    videoID = ((Element)d).getElementsByTagName("yt:videoid").item(0).getChildNodes().item(0).getNodeValue();
-	    
-	    length = Integer.valueOf(((Element)d).getElementsByTagName("media:content").item(0).getAttributes().getNamedItem("duration").getNodeValue());
-	    comments = Integer.valueOf(((Element)d).getElementsByTagName("gd:feedLink").item(0).getAttributes().getNamedItem("countHint").getNodeValue());
-	    
-	    
-	    // Needs to be checked for null values
-	    
-	    try {
-		views = Integer.valueOf(((Element)d).getElementsByTagName("yt:statistics").item(0).getAttributes().item(1).getNodeValue());
-	    } catch (NullPointerException e1) { }
-	    
-	    try {
-		NamedNodeMap ratings = ((Element)d).getElementsByTagName("yt:rating").item(0).getAttributes();
-		dislikes = Integer.valueOf(ratings.item(0).getNodeValue());
-		likes = Integer.valueOf(ratings.item(1).getNodeValue());
-	    } catch (NullPointerException e1) { }
-	    
-	    try {
-		description = ((Element)d).getElementsByTagName("media:description").item(0).getFirstChild().getNodeValue().replaceAll("\\[rn]+", " ");
-	    } catch (NullPointerException e1) { }
-	    
-	    data.add(new YouTubeSearchResult(videoID, author, Matcher.quoteReplacement(title), Matcher.quoteReplacement(description), formatTime(length), length, views, likes, dislikes, comments));
-	    
-	}
-	return data;
     }
     
-    public static YouTube getInstance() {
-	return youtubeInstance;
+    public void addToSync(YouTubeChannel channel) {
+	if (!waitingToSync.contains((channel)))
+	    waitingToSync.add(channel);
     }
-    
+
+    public YouTube getInstance() {
+	return this.instance;
+    }
+
+    public String formatTime(String time) throws DatatypeConfigurationException {
+	
+	Duration dur = DatatypeFactory.newInstance().newDuration(time);
+	
+	String hours = pad(dur.getHours());
+	String minutes = pad(dur.getMinutes());
+	String secs = pad(dur.getSeconds());
+	
+	
+	return (!hours.equals("00") ? hours+":" : "")+minutes+":"+secs;
+	
+	
+	/*String hours = "";
+	String min = "";
+	if (tsd.length == 3) {
+	    hours = tsd[0];
+	    min = tsd[1];
+	} else {
+	    min = tsd[0];
+	}
+	
+	String sec = tsd[tsd.length - 1];
+	
+	sec = pad(sec);
+	min = pad(min);
+	hours = pad(hours);
+	
+	String format = min + ":" + sec;
+	
+	if (!hours.equals("00") && !hours.equals("0")) {
+	    format = hours + ":" + format;
+	}
+	
+	return format;*/
+	
+    }
+
+    private String pad(int what) {
+	return String.format("%02d", what);
+    }
+
+    /*public String formatTime(String seconds) {
+     return formatTime(Integer.valueOf(seconds));
+     }
+
+     public String formatTime(int len) {
+     int seconds = len % 60;
+     int minutes = len / 60;
+     int hours = (int) Math.floor(minutes / 60);
+     if (hours > 0) {
+     minutes -= hours * 60;
+     }
+     return (hours > 0 ? String.format("%02d", hours) + ":" : "") + String.format("%02d", minutes) + ":" + String.format("%02d", seconds);
+     }*/
     public void syncChannelsIfNotSyncing() {
 	if (!waitingToSync.isEmpty() && !isSyncing) {
 	    isSyncing = true;
@@ -442,68 +247,118 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	    isSyncing = false;
 	}
     }
-    
+
+    @Override
+    public boolean addYTUser(String channel, boolean isUsername) {
+	try {
+	    YouTubeChannel newChannel = new YouTubeChannel(channel, engine, this, isUsername);
+	    this.CHANNEL_LIST.put(newChannel.getName(), newChannel);
+	    this.waitingToSync.add(newChannel);
+	    newChannel.setSyncing(true);
+	    newChannel.update();
+	    return true;
+	} catch (Throwable e) {
+	    engine.logError(e, "YouTube [ADD]", channel);
+	    return false;
+	}
+    }
+
+    @Override
+    public boolean addUser(String name) {
+	return addYTUser(name, true);
+    }
+
+    @Override
+    public boolean removeUser(String name) {
+	if (!this.CHANNEL_LIST.containsKey(name)) {
+	    return false;
+	}
+	YouTubeChannel ytc = this.CHANNEL_LIST.get(name);
+	ytc.stop();
+	this.CHANNEL_LIST.remove(name);
+	return true;
+    }
+
+    @Override
+    public void updateAll() {
+	for (YouTubeChannel ytc : this.CHANNEL_LIST.values()) {
+	    try {
+		ytc.update();
+	    } catch (Throwable e) {
+	    }
+	}
+    }
+
+    @Override
+    public void startAll() {
+	for (YouTubeChannel ytc : this.CHANNEL_LIST.values()) {
+	    ytc.startIfNotRunning();
+	}
+    }
+
+    @Override
+    public void stopAll() {
+	for (YouTubeChannel ytc : this.CHANNEL_LIST.values()) {
+	    ytc.stop();
+	}
+    }
+
+    @Override
+    public void update(String name) {
+    }
+
+    @Override
+    public long timeTilUpdate() {
+	return this.announcerList.iterator().next().timeTilUpdate();
+    }
+
     @Override
     public long getUpdateDelay() {
 	return (engine == null ? 600000 : Long.valueOf(engine.config.getProperty("youtubeUpdateDelay")));
     }
-    
+
     @Override
     public void scheduleThreadRestart(Object channel) {
-	((YouTubeChannel)channel).stop();
-	((YouTubeChannel)channel).startIfNotRunning();
     }
-    
+
     @Override
     public int getDeadThreads() {
 	int x = 0;
 	for (YouTubeChannel a : this.CHANNEL_LIST.values()) {
-	    if (a.isDead())
+	    if (a.isDead()) {
 		x++;
+	    }
 	}
 	return x;
     }
-    
-    public void restartDeadThreads() {
-	if (engine.config.getProperty("youtubeRestartDeadThreads", "true").equals("true") && getDeadThreads() > 0 && !startingDead) {
-	    startingDead = true;
-	    for (YouTubeChannel a : this.CHANNEL_LIST.values())
-		if (a.isDead()) {
-		    a.stopIfRunning();
-		    a.startIfNotRunning();
-		}
-	    startingDead = false;
-	    
-	}
-    }
-    
+
     @Override
     public int getTotalThreads() {
-	return CHANNEL_LIST.size();
+	return this.announcerList.size();
     }
-    
+
+    @Override
+    public List<Announcer> getAnnouncerList() {
+	return this.announcerList;
+    }
+
     @Override
     public void writeDebug(FileWriter fw) {
     }
-    
+
     @Override
     public Throwable getLastExeption() {
-	return lastException;
+	return this.lastException;
     }
-    
+
     @Override
     public long getLastExceptionTime() {
-	return lastExceptionTime;
+	return this.lastExceptionTime;
     }
-    
+
     @Override
     public long getLastUpdateTime() {
-	return lastForcedUpdate;
+	return this.lastUpdateTime;
     }
-    
-    @Override
-    public List<Announcer> getAnnouncerList() {
-	return announcerList;
-    }
-    
+
 }

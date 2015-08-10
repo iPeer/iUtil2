@@ -1,4 +1,4 @@
-package com.simple.ipeer.iutil2.commands;
+/*package com.simple.ipeer.iutil2.commands;
 
 
 import com.simple.ipeer.iutil2.commands.base.CommandException;
@@ -11,10 +11,6 @@ import java.util.List;
 import javax.xml.parsers.ParserConfigurationException;
 import org.xml.sax.SAXException;
 
-/**
- *
- * @author iPeer
- */
 public class CommandYouTubeSearch extends Command {
     
     public CommandYouTubeSearch() {
@@ -36,7 +32,7 @@ public class CommandYouTubeSearch extends Command {
 		    result++;
 		    String out = engine.config.getProperty("youtubeSearchFormat")
 			    .replaceAll("%RESULT%", Integer.toString(result))
-			    /*.replaceAll("%(TOTAL)?RESULTS%", Integer.toString(r.getTotalResults()))*/
+			    //.replaceAll("%(TOTAL)?RESULTS%", Integer.toString(r.getTotalResults()))
 			    .replaceAll("%(USER|(VIDEO)?AUTHOR)%", r.getAuthor())
 			    .replaceAll("%(VIDEO)?TITLE%", r.getTitle())
 			    .replaceAll("%(VIDEO)?LENGTH%", r.getFormattedLength())
@@ -77,3 +73,4 @@ public class CommandYouTubeSearch extends Command {
     }
     
 }
+*/

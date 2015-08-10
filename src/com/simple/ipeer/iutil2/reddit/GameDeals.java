@@ -8,6 +8,8 @@ import com.simple.ipeer.iutil2.util.CustomURLShortener;
 import com.simple.ipeer.iutil2.util.Util;
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -70,10 +72,14 @@ public class GameDeals implements Announcer, AnnouncerHandler, Runnable, Debugga
 	    if (main == null || main.config.getProperty("rgdEnabled").equals("true")) {
 		try {
 		    DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-		    String URL = "http://www.reddit.com/r/GameDeals/new/.rss";
+		    //String URL = "http://www.reddit.com/r/GameDeals/new/.rss";
 		    DocumentBuilder a = f.newDocumentBuilder();
 		    Document doc = a.newDocument();
-		    doc = a.parse(URL);
+		    URL uri = new URL("http://www.reddit.com/r/GameDeals/new/.rss");
+		    URLConnection con = uri.openConnection();
+		    con.setRequestProperty("User-Agent", "/r/GameDeals IRC Announcer | Build "+Main.BOT_VERSION+" | Java "+System.getProperty("java.version")+" ("+System.getProperty("sun.arch.data.model")+"-bit) | /u/iPeer");
+		    con.connect();
+		    doc = a.parse(con.getInputStream());
 		    Element e = doc.getDocumentElement();
 		    e.normalize();
 		    
@@ -277,6 +283,11 @@ public class GameDeals implements Announcer, AnnouncerHandler, Runnable, Debugga
     @Override
     public long getLastUpdateTime() {
 	return lastUpdate;
+    }
+
+    @Override
+    public boolean addYTUser(String name, boolean isChannel) {
+	return true;
     }
     
 }

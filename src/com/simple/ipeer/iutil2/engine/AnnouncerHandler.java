@@ -16,5 +16,6 @@ public interface AnnouncerHandler {
 	public int getDeadThreads();
 	public int getTotalThreads();
 	public List<Announcer> getAnnouncerList();
+	public boolean addYTUser(String channel, boolean isUsername);
 	
 }

@@ -196,7 +196,7 @@ public class Protocol {
 	    
 	    // YouTube Playlists 
 	    
-	    else if (message.matches(".*https?://(www.)?youtube.com/playlist\\?(p=||list=).*")) {
+	    /*else if (message.matches(".*https?://(www.)?youtube.com/playlist\\?(p=||list=).*")) {
 		String playlistID = message.split("playlist\\?(p|list)=")[1].split("[\\.,!\"£\\$%\\^'@~/\\\\\\+\\*& ]")[0];
 		HashMap<String, String> plData = new HashMap<String, String>();
 		
@@ -209,11 +209,11 @@ public class Protocol {
 		    engine.send("PRIVMSG "+channel+" :"+plOut);
 		}
 		
-	    }
+	    }*/
 	    
 	    // YouTube Links
 	    
-	    else if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
+	    /*else if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
 		engine.getProfiler().start("YouTubeLinks");
 		int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
 		int curVid = 1;
@@ -244,7 +244,7 @@ public class Protocol {
 				.replaceAll("%LIKES%", ytdata.get("likes"))
 				.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
 				.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
-			if (!playlistID.equals("") && !playlistID.startsWith("WL") /* "Watch Later" playlists */) {
+			if (!playlistID.equals("") && !playlistID.startsWith("WL")) {
 			    plData = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getPlaylistInfo(playlistID.split("[&\\?#]")[0]);
 			    if (plData.containsKey("error"))
 				plOut = plData.get("error");
@@ -292,7 +292,7 @@ public class Protocol {
 		    }
 		}
 		engine.getProfiler().end();
-	    }
+	    }*/
 	    
 	    else if (message.matches(".*https?://(www.)?twitter.com/.*/status(es)?/.*")) { // Tweet links
 		String[] tweetIDs = message.split("/status(es)?/");

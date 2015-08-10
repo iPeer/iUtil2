@@ -111,7 +111,7 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
 	    
 	    //System.err.println("NEW DATA: "+channel);
 	    
-	    String status = ((String)channel.get("status")).replaceAll("\\n", " ").trim();
+	    String status = ((String)channel.get("status")).replaceAll("\\n", " ").replaceAll("\\r", "").trim();
 	    String game = (String)channel.get("game");
 	    String userName = (String)channel.get("display_name");
 	    streamData.add(0, userName);
@@ -270,6 +270,11 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
     @Override
     public long getStartupTime() {
 	return this.startupTime;
+    }
+
+    @Override
+    public boolean addYTUser(String name, boolean isChannel) {
+	return true;
     }
     
 }

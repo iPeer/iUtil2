@@ -294,5 +294,10 @@ public class AWeSomeStatus implements AnnouncerHandler, Runnable, DebuggableSub,
     public long getStartupTime() {
 	return this.startupTime;
     }
+
+    @Override
+    public boolean addYTUser(String channel, boolean isUsername) {
+	return true;
+    }
     
 }

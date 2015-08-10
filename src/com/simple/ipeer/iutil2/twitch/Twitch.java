@@ -258,5 +258,10 @@ public class Twitch implements AnnouncerHandler, Debuggable, DebuggableSub {
     public List<Announcer> getAnnouncerList() {
 	return announcerList;
     }
+
+    @Override
+    public boolean addYTUser(String channel, boolean isUsername) {
+	return true;
+    }
     
 }

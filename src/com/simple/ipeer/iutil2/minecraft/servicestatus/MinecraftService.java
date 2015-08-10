@@ -178,5 +178,10 @@ public class MinecraftService implements IMinecraftService, Announcer, Debuggabl
     public long getLastUpdateTime() {
 	return this.lastUpdate;
     }
+
+    @Override
+    public boolean addYTUser(String name, boolean isChannel) {
+	return true;
+    }
     
 }

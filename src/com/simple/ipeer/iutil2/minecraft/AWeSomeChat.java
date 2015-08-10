@@ -132,6 +132,11 @@ public class AWeSomeChat implements AnnouncerHandler, DebuggableSub {
     public long getLastUpdateTime() {
 	return lastUpdate;
     }
+
+    @Override
+    public boolean addYTUser(String channel, boolean isUsername) {
+	return true;
+    }
     
     
 }

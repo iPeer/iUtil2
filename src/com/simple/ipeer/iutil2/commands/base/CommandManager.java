@@ -2,6 +2,7 @@ package com.simple.ipeer.iutil2.commands.base;
 
 import com.simple.ipeer.iutil2.commands.CommandAddTwitch;
 import com.simple.ipeer.iutil2.commands.CommandAddYouTube;
+import com.simple.ipeer.iutil2.commands.CommandAddYouTubeUser;
 import com.simple.ipeer.iutil2.commands.CommandConfig;
 import com.simple.ipeer.iutil2.commands.CommandDebugDump;
 import com.simple.ipeer.iutil2.commands.CommandDelTell;
@@ -23,7 +24,7 @@ import com.simple.ipeer.iutil2.commands.CommandSend;
 import com.simple.ipeer.iutil2.commands.CommandTell;
 import com.simple.ipeer.iutil2.commands.CommandTwitchUpdate;
 import com.simple.ipeer.iutil2.commands.CommandUnregisterCommand;
-import com.simple.ipeer.iutil2.commands.CommandYouTubeSearch;
+//import com.simple.ipeer.iutil2.commands.CommandYouTubeSearch;
 import com.simple.ipeer.iutil2.commands.CommandYouTubeUpdate;
 import com.simple.ipeer.iutil2.console.Console;
 import com.simple.ipeer.iutil2.engine.Main;
@@ -59,9 +60,10 @@ public class CommandManager {
 	registerCommand(new CommandSend(), true);
 	registerCommand(new CommandNick(), true);
 	registerCommand(new CommandDebugDump(), true);
-	registerCommand(new CommandYouTubeSearch(), true);
+	//registerCommand(new CommandYouTubeSearch(), true);
 	registerCommand(new CommandMinecraftServiceStatus(), true);
 	registerCommand(new CommandAddYouTube(), true);
+	registerCommand(new CommandAddYouTubeUser(), true);
 	registerCommand(new CommandDelYouTube(), true);
 	registerCommand(new CommandAddTwitch(), true);
 	registerCommand(new CommandDelTwitch(), true);

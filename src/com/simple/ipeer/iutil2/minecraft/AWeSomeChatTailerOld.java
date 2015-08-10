@@ -458,5 +458,10 @@ public class AWeSomeChatTailerOld implements Runnable, IAWeSomeChatTailer, Annou
     public String stripCodes(String a) {
 	return a.replaceAll("Â§[0-9a-z]", "");
     }
+
+    @Override
+    public boolean addYTUser(String name, boolean isChannel) {
+	return true;
+    }
     
 }

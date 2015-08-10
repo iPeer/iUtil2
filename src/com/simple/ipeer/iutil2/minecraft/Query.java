@@ -22,7 +22,7 @@ public class Query {
     private String[] users;
     
     public static void main(String[] args) throws IOException {
-	Query q = new Query("79.143.191.217", 35565);
+	Query q = new Query("176.31.101.31", 35565);
 	q.sendQuery();
 	Map<String, String> data = q.getData();
 	String[] players = q.getPlayers();

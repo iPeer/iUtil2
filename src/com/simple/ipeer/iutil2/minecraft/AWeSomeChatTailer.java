@@ -536,5 +536,10 @@ public class AWeSomeChatTailer implements Runnable, IAWeSomeChatTailer, Announce
     public String stripCodes(String a) {
 	return a.replaceAll("Â?§[0-9a-z]", "");
     }
+
+    @Override
+    public boolean addYTUser(String name, boolean isChannel) {
+	return true;
+    }
     
 }
