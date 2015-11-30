@@ -224,3 +224,9 @@ pip-log.txt
 #Mr Developer
 .mr.developer.cfg
 /nbproject/private/
+build - Copy.xml
+build.xml
+manifest.mf
+Reddit/GameDeals.iuc
+src/com/simple/ipeer/iutil2/youtube/YouTubeChannel_old.java
+src/com/simple/ipeer/iutil2/youtube/YouTube_old.java

@@ -386,28 +386,24 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	    String channelName = __jo.get("channelTitle").toString();
 	    String videoTitle = __jo.get("title").toString();
 	    String videoDesc = __jo.get("description").toString();
+	    String liveTags = __jo.get("liveBroadcastContent").toString();
 	    __jo = (JSONObject) _jo.get("contentDetails");
 	    String videoLength = __jo.get("duration").toString();
 	    __jo = (JSONObject) _jo.get("statistics");
-	    String likes = __jo.get("likeCount").toString();
-	    String dislikes = __jo.get("dislikeCount").toString();
+	    String likes = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("likeCount").toString()));
+	    String dislikes = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("dislikeCount").toString()));
 	    String views = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("viewCount").toString()));
-	    String comments = __jo.get("commentCount").toString();
+	    String comments = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("commentCount").toString()));
 	    data.put("author", channelName);
 	    data.put("title", videoTitle);
 	    data.put("duration", this.formatTime(videoLength));
-	    data.put("description", videoDesc);
+	    if (videoDesc.length() > 0) 
+		data.put("description", videoDesc);
 	    data.put("likes", likes);
 	    data.put("dislikes", dislikes);
 	    data.put("views", views);
 	    data.put("comments", comments);
-/*				.replaceAll("%USER%", ytdata.get("author"))
-				.replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(ytdata.get("title")))
-				.replaceAll("%(VIDEO)?LENGTH%", ytdata.get("duration"))
-				.replaceAll("%VIEWS%", ytdata.get("views"))
-				.replaceAll("%COMMENTS%", ytdata.get("comments"))
-				.replaceAll("%LIKES%", ytdata.get("likes"))
-				.replaceAll("%DISLIKES%", ytdata.get("dislikes"))*/
+	    data.put("liveData", liveTags);
 	}
 	return data;
     }

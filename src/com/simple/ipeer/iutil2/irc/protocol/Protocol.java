@@ -238,7 +238,7 @@ public class Protocol {
 			String out = (engine == null ? "%C1%[%C2%%USER%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] (%C2%%VIEWS%%C1% views, %C2%%COMMENTS%%C1% comments, %C2%%LIKES%%C1% likes, %C2%%DISLIKES%%C1% dislikes) %DASH% %VIDEOURL%" : engine.config.getProperty("youtubeInfoFormat"))
 				.replaceAll("%USER%", ytdata.get("author"))
 				.replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(ytdata.get("title")))
-				.replaceAll("%(VIDEO)?LENGTH%", ytdata.get("duration"))
+				.replaceAll("%(VIDEO)?LENGTH%", (ytdata.get("liveData").equals("live") ? "LIVE" : ytdata.get("duration")))
 				.replaceAll("%VIEWS%", ytdata.get("views"))
 				.replaceAll("%COMMENTS%", ytdata.get("comments"))
 				.replaceAll("%LIKES%", ytdata.get("likes"))
