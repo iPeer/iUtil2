@@ -30,7 +30,7 @@ public class Protocol {
     
     public static void main(String[] args) {
 	Protocol p = new Protocol();
-	p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev ::D", null);
+	p.parse(":iPeer!iPeer@13.33.33.37 PRIVMSG #Peer.Dev :https://www.youtube.com/watch?v=hDwk6tC7BPU", null);
     }
     
     public void parse(String line, final Main engine) {
@@ -213,7 +213,7 @@ public class Protocol {
 	    
 	    // YouTube Links
 	    
-	    /*else if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
+	    else if (message.matches((engine == null ? ".*https?://(www.)?youtu(be.com/watch.*(?=(\\?v=|&v=))|.be/.*).*" : engine.config.getProperty("youtubeLinkRegex"))) && !nick.startsWith("iUtil")) {
 		engine.getProfiler().start("YouTubeLinks");
 		int maxVids = (engine == null ? 2 : Integer.valueOf(engine.config.getProperty("youtubeMaxProcessedLinks")));
 		int curVid = 1;
@@ -231,10 +231,10 @@ public class Protocol {
 		    if (engine == null)
 			System.err.println(videoid);
 		    HashMap<String, String> ytdata = new HashMap<String, String>();
-		    HashMap<String, String> plData = new HashMap<String, String>();
+		    //HashMap<String, String> plData = new HashMap<String, String>();
 		    try {
 			ytdata = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getVideoInfo(videoid.split("[&\\?#]")[0]);
-			String plOut = "";
+			//String plOut = "";
 			String out = (engine == null ? "%C1%[%C2%%USER%%C1%] %C2%%VIDEOTITLE% %C1%[%C2%%VIDEOLENGTH%%C1%] (%C2%%VIEWS%%C1% views, %C2%%COMMENTS%%C1% comments, %C2%%LIKES%%C1% likes, %C2%%DISLIKES%%C1% dislikes) %DASH% %VIDEOURL%" : engine.config.getProperty("youtubeInfoFormat"))
 				.replaceAll("%USER%", ytdata.get("author"))
 				.replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(ytdata.get("title")))
@@ -244,13 +244,13 @@ public class Protocol {
 				.replaceAll("%LIKES%", ytdata.get("likes"))
 				.replaceAll("%DISLIKES%", ytdata.get("dislikes"))
 				.replaceAll("%(VIDEO)?URL%", (engine == null ? "https://youtu.be/" : engine.config.getProperty("youtubeURLPrefix"))+videoid);
-			if (!playlistID.equals("") && !playlistID.startsWith("WL")) {
+			/*if (!playlistID.equals("") && !playlistID.startsWith("WL")) {
 			    plData = (engine == null ? new YouTube(null) : ((YouTube)engine.getAnnouncers().get("YouTube"))).getPlaylistInfo(playlistID.split("[&\\?#]")[0]);
 			    if (plData.containsKey("error"))
 				plOut = plData.get("error");
 			    else
 				plOut = "%C1%Playlist: %C2%"+plData.get("playlistName")+" %C1%by %C2%"+plData.get("playlistAuthor")+" %C1%(%C2%"+plData.get("videoCount")+" videos%C1%) %DASH%%C2% https://www.youtube.com/playlist?p="+plData.get("playlistID");
-			}
+			}*/
 			if (engine != null)
 			    engine.send("PRIVMSG "+channel+" :"+out);
 			else
@@ -270,11 +270,11 @@ public class Protocol {
 				System.err.println(description.replaceAll("%C([0-9]+)?%", ""));
 			    else
 				engine.send("PRIVMSG "+channel+" :"+description);
-			    if (!(plOut == null || plOut.equals("")))
+			    /*if (!(plOut == null || plOut.equals("")))
 							    if (engine == null)
 				System.err.println(plOut.replaceAll("%C([0-9]+)?%", ""));
 			    else
-				engine.send("PRIVMSG "+channel+" :"+plOut);
+				engine.send("PRIVMSG "+channel+" :"+plOut);*/
 			}
 		    } catch (IOException e) {
 			if (engine != null)
@@ -292,7 +292,7 @@ public class Protocol {
 		    }
 		}
 		engine.getProfiler().end();
-	    }*/
+	    }
 	    
 	    else if (message.matches(".*https?://(www.)?twitter.com/.*/status(es)?/.*")) { // Tweet links
 		String[] tweetIDs = message.split("/status(es)?/");

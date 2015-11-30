@@ -5,12 +5,17 @@ import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Debuggable;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
+import com.simple.ipeer.iutil2.util.Util;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Reader;
+import java.net.URL;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -18,9 +23,11 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import javax.net.ssl.HttpsURLConnection;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
@@ -359,6 +366,50 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
     @Override
     public long getLastUpdateTime() {
 	return this.lastUpdateTime;
+    }
+    
+    public HashMap<String,String> getVideoInfo(String id) throws IOException, DatatypeConfigurationException {
+	String apiKey = Util.readEncrypted(new File("./YouTube/YouTubeAPIKey.iuc"));
+	HttpsURLConnection _urlC = (HttpsURLConnection) new URL("https://www.googleapis.com/youtube/v3/videos?part=snippet%2CcontentDetails%2Cstatistics&id=" + id + "&key=" + apiKey).openConnection();
+	JSONObject _json = (JSONObject) JSONValue.parse(new InputStreamReader(_urlC.getInputStream()));
+	JSONArray _jsonArray = (JSONArray) _json.get("items");
+
+	HashMap<String, String> data = new HashMap<String, String>();
+
+	for (int _x = 0; _x < _jsonArray.size(); _x++) {
+
+	    JSONObject _jo = (JSONObject) _jsonArray.get(_x);
+
+	    //System.out.println(_jo);
+	    String videoID = _jo.get("id").toString();
+	    JSONObject __jo = (JSONObject) _jo.get("snippet");
+	    String channelName = __jo.get("channelTitle").toString();
+	    String videoTitle = __jo.get("title").toString();
+	    String videoDesc = __jo.get("description").toString();
+	    __jo = (JSONObject) _jo.get("contentDetails");
+	    String videoLength = __jo.get("duration").toString();
+	    __jo = (JSONObject) _jo.get("statistics");
+	    String likes = __jo.get("likeCount").toString();
+	    String dislikes = __jo.get("dislikeCount").toString();
+	    String views = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("viewCount").toString()));
+	    String comments = __jo.get("commentCount").toString();
+	    data.put("author", channelName);
+	    data.put("title", videoTitle);
+	    data.put("duration", this.formatTime(videoLength));
+	    data.put("description", videoDesc);
+	    data.put("likes", likes);
+	    data.put("dislikes", dislikes);
+	    data.put("views", views);
+	    data.put("comments", comments);
+/*				.replaceAll("%USER%", ytdata.get("author"))
+				.replaceAll("%(VIDEO)?TITLE%", Matcher.quoteReplacement(ytdata.get("title")))
+				.replaceAll("%(VIDEO)?LENGTH%", ytdata.get("duration"))
+				.replaceAll("%VIEWS%", ytdata.get("views"))
+				.replaceAll("%COMMENTS%", ytdata.get("comments"))
+				.replaceAll("%LIKES%", ytdata.get("likes"))
+				.replaceAll("%DISLIKES%", ytdata.get("dislikes"))*/
+	}
+	return data;
     }
 
 }
