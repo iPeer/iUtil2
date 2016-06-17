@@ -393,7 +393,11 @@ public class YouTube implements AnnouncerHandler, Debuggable, DebuggableSub {
 	    String likes = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("likeCount").toString()));
 	    String dislikes = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("dislikeCount").toString()));
 	    String views = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("viewCount").toString()));
-	    String comments = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("commentCount").toString()));
+	    String comments = "0";
+	    try {
+		comments = new DecimalFormat("#,###").format(Integer.valueOf(__jo.get("commentCount").toString()));
+	    }
+	    catch (Throwable _e) {}
 	    data.put("author", channelName);
 	    data.put("title", videoTitle);
 	    data.put("duration", this.formatTime(videoLength));
