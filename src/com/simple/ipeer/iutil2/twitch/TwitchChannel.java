@@ -95,6 +95,7 @@ public class TwitchChannel implements Announcer, Runnable, DebuggableSub {
 	try {
 	    URL url = new URL("https://api.twitch.tv/kraken/streams?channel="+this.channelName.toLowerCase());
 	    HttpsURLConnection connection = (HttpsURLConnection)url.openConnection();
+	    connection.setRequestProperty("Client-ID", this.twitch.CLIENT_ID);
 	    
 	    BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
 	    String jsonData = in.readLine();

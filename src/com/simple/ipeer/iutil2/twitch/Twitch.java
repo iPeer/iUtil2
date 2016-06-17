@@ -16,6 +16,7 @@ import com.simple.ipeer.iutil2.engine.AnnouncerHandler;
 import com.simple.ipeer.iutil2.engine.Debuggable;
 import com.simple.ipeer.iutil2.engine.DebuggableSub;
 import com.simple.ipeer.iutil2.engine.Main;
+import com.simple.ipeer.iutil2.util.Util;
 
 public class Twitch implements AnnouncerHandler, Debuggable, DebuggableSub {
     
@@ -27,6 +28,8 @@ public class Twitch implements AnnouncerHandler, Debuggable, DebuggableSub {
     private long lastExceptionTime = 0L;
     private long lastForcedUpdate = 0L;
     private List<Announcer> announcerList = new ArrayList<Announcer>();
+    
+    public String CLIENT_ID = "";
     
     public Twitch (Main engine) {
 	engine.log("Twitch announcer is starting up.", "Twitch");
@@ -48,6 +51,10 @@ public class Twitch implements AnnouncerHandler, Debuggable, DebuggableSub {
 	a = new File(engine.config.getProperty("twitchDir"), "config");
 	if (!a.exists())
 	    a.mkdirs();
+	if (engine != null) {
+	    engine.log("Reading Client_ID from file...", "Twitch");
+	}
+	CLIENT_ID = Util.readEncrypted(new File(a, "clientid.uic"));
 	this.users = loadChannels();
 	if (engine != null)
 	    engine.log("Twitch announcer started up succesfully.", "Twitch");
